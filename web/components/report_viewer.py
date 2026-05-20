@@ -10,7 +10,7 @@ from typing import Any
 
 import streamlit as st
 
-from tradingagents.reporting.compact_html_report import get_stock_name, _safe_filename
+from tradingagents.reporting.compact_html_report import get_stock_name, _safe_filename, _report_dir
 
 
 def _strip_think(text: str) -> str:
@@ -41,7 +41,7 @@ def _resolve_html_report(ticker: str, trade_date: str) -> tuple[bool, bytes, str
     """Return (exists, bytes, suggested_filename) for the compact HTML report."""
     stock_name = get_stock_name(ticker)
     safe_name = _safe_filename(stock_name) if stock_name else "unknown"
-    html_file = _Path("report") / f"{_safe_filename(ticker)}_{safe_name}_{trade_date}.html"
+    html_file = _report_dir() / f"{_safe_filename(ticker)}_{safe_name}_{trade_date}.html"
     if html_file.exists():
         return True, html_file.read_bytes(), f"{ticker}_{safe_name}_{trade_date}.html"
     return False, b"", ""
@@ -80,11 +80,18 @@ def render_report(
     if elapsed_str:
         header_line += f"  {elapsed_str}"
 
+    # Core decision content for the summary card
+    final_decision = final_state.get("final_trade_decision", "")
+    decision_md = _strip_think(str(final_decision)) if final_decision else "暂无最终投资建议"
+
     st.markdown(
         f"""
         <div style="background:#ffffff; border:1px solid #e5e7eb; border-radius:12px; padding:1.2rem 1.5rem; margin:1rem 0 1.5rem;">
             <div style="font-size:1.05rem; font-weight:700; color:#1f2937; margin-bottom:0.8rem;">
                 {header_line}
+            </div>
+            <div style="border-top:1px solid #e5e7eb; padding-top:0.8rem; color:#374151; line-height:1.7;">
+                {decision_md}
             </div>
         </div>
         """,
