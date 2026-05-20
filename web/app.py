@@ -235,9 +235,11 @@ _SELECTED_ANALYSTS = [
 
 def _build_config() -> dict:
     config = DEFAULT_CONFIG.copy()
-    config["llm_provider"] = "minimax"
-    config["deep_think_llm"] = "MiniMax-M2.7"
-    config["quick_think_llm"] = "MiniMax-M2.7-highspeed"
+    # MiniMax Anthropic-compatible endpoint
+    config["llm_provider"] = "anthropic"
+    config["backend_url"] = "https://api.minimaxi.com/anthropic"
+    config["deep_think_llm"] = "claude-opus-4-6"
+    config["quick_think_llm"] = "claude-sonnet-4-6"
     config["data_vendors"] = {
         "core_stock_apis": "a_stock",
         "technical_indicators": "a_stock",
@@ -248,6 +250,7 @@ def _build_config() -> dict:
     config["max_debate_rounds"] = 5
     config["max_risk_discuss_rounds"] = 5
     config["output_language"] = "Chinese"
+    config["anthropic_effort"] = "high"
     return config
 
 
