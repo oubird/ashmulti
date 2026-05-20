@@ -67,7 +67,13 @@ def _infer_active_stage(tracker: ProgressTracker) -> None:
             return
 
 
-def _run(ticker: str, trade_date: str, config: dict, tracker: ProgressTracker) -> None:
+def _run(
+    ticker: str,
+    trade_date: str,
+    config: dict,
+    tracker: ProgressTracker,
+    selected_analysts: list[str],
+) -> None:
     """Execute the full pipeline in the current thread."""
     from cli.stats_handler import StatsCallbackHandler
     from tradingagents.graph.trading_graph import TradingAgentsGraph
@@ -75,6 +81,7 @@ def _run(ticker: str, trade_date: str, config: dict, tracker: ProgressTracker) -
     stats = StatsCallbackHandler()
 
     graph = TradingAgentsGraph(
+        selected_analysts,
         debug=True,
         config=config,
         callbacks=[stats],
@@ -98,6 +105,27 @@ def _run(ticker: str, trade_date: str, config: dict, tracker: ProgressTracker) -
     graph.ticker = ticker
     graph._log_state(trade_date, last_chunk)
 
+    # Generate compact HTML report (post-processing, failures are non-fatal)
+    try:
+        from tradingagents.reporting.compact_html_report import (
+            generate_compact_html_report,
+            get_stock_name,
+            save_compact_html_report,
+        )
+
+        html = generate_compact_html_report(
+            llm=graph.quick_thinking_llm,
+            final_state=last_chunk,
+            ticker=ticker,
+            trade_date=trade_date,
+        )
+        stock_name = get_stock_name(ticker)
+        save_compact_html_report(html, ticker, stock_name, trade_date)
+    except Exception as exc:
+        import logging
+
+        logging.getLogger(__name__).warning("Compact HTML report generation failed: %s", exc)
+
     tracker.mark_complete(last_chunk, signal)
 
 
@@ -106,6 +134,7 @@ def run_analysis_in_thread(
     trade_date: str,
     config: dict,
     tracker: ProgressTracker,
+    selected_analysts: list[str],
 ) -> threading.Thread:
     """Launch the pipeline in a daemon thread. Returns the thread handle."""
     tracker.ticker = ticker
@@ -115,7 +144,7 @@ def run_analysis_in_thread(
 
     def _target() -> None:
         try:
-            _run(ticker, trade_date, config, tracker)
+            _run(ticker, trade_date, config, tracker, selected_analysts)
         except Exception as exc:
             tracker.mark_error(str(exc))
 

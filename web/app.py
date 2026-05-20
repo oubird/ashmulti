@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sys
-import time
+from datetime import date, timedelta
 from pathlib import Path
 
 import streamlit as st
@@ -51,13 +51,13 @@ st.markdown(
         font-family: 'Inter', -apple-system, sans-serif;
     }
     .stApp {
-        background: #0a0a0a;
+        background: #f8f9fa;
     }
     section[data-testid="stSidebar"] {
-        background: #0f0f0f;
-        border-right: 1px solid #1a1a1a;
+        background: #ffffff;
+        border-right: 1px solid #e5e7eb;
     }
-    .stMetric label { color: #888 !important; font-size: 0.8rem !important; }
+    .stMetric label { color: #6b7280 !important; font-size: 0.8rem !important; }
     .stMetric [data-testid="stMetricValue"] {
         color: #ff5a1f !important;
         font-weight: 700 !important;
@@ -70,48 +70,52 @@ st.markdown(
         border: none !important;
         font-weight: 700 !important;
         letter-spacing: 0.05em !important;
-        box-shadow: 0 4px 15px rgba(255,90,31,0.3) !important;
+        box-shadow: 0 4px 15px rgba(255,90,31,0.25) !important;
         transition: all 0.2s ease !important;
     }
     button[kind="primary"]:hover {
         background: linear-gradient(135deg, #e04d15, #ff5a1f) !important;
-        box-shadow: 0 6px 20px rgba(255,90,31,0.4) !important;
+        box-shadow: 0 6px 20px rgba(255,90,31,0.35) !important;
         transform: translateY(-1px) !important;
     }
     /* Secondary buttons (history items) */
     button[kind="secondary"] {
-        background: #161616 !important;
-        border: 1px solid #2a2a2a !important;
-        color: #ccc !important;
+        background: #f3f4f6 !important;
+        border: 1px solid #e5e7eb !important;
+        color: #374151 !important;
         transition: all 0.2s ease !important;
     }
     button[kind="secondary"]:hover {
-        background: #1e1e1e !important;
+        background: #e5e7eb !important;
         border-color: #ff5a1f !important;
         color: #ff5a1f !important;
     }
     .stExpander {
-        border: 1px solid #222 !important;
+        border: 1px solid #e5e7eb !important;
         border-radius: 8px !important;
+        background: #ffffff !important;
     }
     .stTabs [data-baseweb="tab"] {
-        color: #888 !important;
+        color: #6b7280 !important;
     }
     .stTabs [aria-selected="true"] {
         color: #ff5a1f !important;
         border-bottom-color: #ff5a1f !important;
     }
     div[data-testid="stDownloadButton"] button {
-        background: #1a1a2e !important;
+        background: #fff7ed !important;
         border: 1px solid #ff5a1f !important;
-        color: #ff5a1f !important;
+        color: #c2410c !important;
+    }
+    div[data-testid="stDownloadButton"] button:hover {
+        background: #ffedd5 !important;
     }
     /* Text input styling */
     input[data-testid="stTextInputRootElement"] input,
     .stTextInput input {
-        background: #161616 !important;
-        border-color: #2a2a2a !important;
-        color: #f5f1eb !important;
+        background: #ffffff !important;
+        border-color: #d1d5db !important;
+        color: #1f2937 !important;
     }
     .stTextInput input:focus {
         border-color: #ff5a1f !important;
@@ -119,9 +123,9 @@ st.markdown(
     }
     /* Date input styling */
     .stDateInput input {
-        background: #161616 !important;
-        border-color: #2a2a2a !important;
-        color: #f5f1eb !important;
+        background: #ffffff !important;
+        border-color: #d1d5db !important;
+        color: #1f2937 !important;
     }
     </style>
     """,
@@ -129,13 +133,111 @@ st.markdown(
 )
 
 
+# ── Welcome screen helper ───────────────────────────────────────────────────
+
+def _render_welcome() -> None:
+    st.markdown(
+        """
+        <div style="max-width: 900px; margin: 0 auto; padding: 2rem 1rem;">
+            <div style="text-align: center; margin-bottom: 2.5rem;">
+                <div style="font-size: 3.5rem; margin-bottom: 0.5rem;">📈</div>
+                <div style="font-size: 2.2rem; font-weight: 900; margin-bottom: 0.4rem;">
+                    <span style="color: #ff5a1f;">Trading</span><span style="color: #1f2937;">Agents</span><span style="color: #1f2937;">-</span><span style="color: #ff5a1f;">Astock</span>
+                </div>
+                <div style="color: #6b7280; font-size: 1.05rem; line-height: 1.6;">
+                    A股多Agent投研分析系统
+                </div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # Pipeline flow pills
+    st.markdown(
+        """
+        <div style="max-width: 900px; margin: 0 auto 2rem auto; padding: 0 1rem;">
+            <div style="background: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 1.2rem 1.5rem; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+                <div style="font-size: 0.85rem; color: #9ca3af; margin-bottom: 0.6rem; letter-spacing: 1px;">分析流程</div>
+                <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 0.4rem; font-size: 0.85rem; color: #4b5563;">
+                    <span style="background: #fff7ed; color: #c2410c; padding: 0.25rem 0.6rem; border-radius: 999px; font-weight: 600;">7位分析师</span>
+                    <span style="color: #d1d5db;">→</span>
+                    <span style="background: #fff7ed; color: #c2410c; padding: 0.25rem 0.6rem; border-radius: 999px; font-weight: 600;">质量门控</span>
+                    <span style="color: #d1d5db;">→</span>
+                    <span style="background: #fff7ed; color: #c2410c; padding: 0.25rem 0.6rem; border-radius: 999px; font-weight: 600;">多空辩论</span>
+                    <span style="color: #d1d5db;">→</span>
+                    <span style="background: #fff7ed; color: #c2410c; padding: 0.25rem 0.6rem; border-radius: 999px; font-weight: 600;">风控评估</span>
+                    <span style="color: #d1d5db;">→</span>
+                    <span style="background: #fff7ed; color: #c2410c; padding: 0.25rem 0.6rem; border-radius: 999px; font-weight: 600;">最终决策</span>
+                </div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # Feature cards grid
+    st.markdown(
+        """
+        <div style="max-width: 900px; margin: 0 auto 2rem auto; padding: 0 1rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+            <div style="background: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 1.2rem; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+                <div style="font-size: 1.5rem; margin-bottom: 0.4rem;">🤖</div>
+                <div style="font-weight: 700; color: #1f2937; margin-bottom: 0.3rem; font-size: 0.95rem;">7位AI分析师</div>
+                <div style="color: #6b7280; font-size: 0.82rem; line-height: 1.5;">市场、情绪、新闻、基本面、政策、游资、解禁全覆盖</div>
+            </div>
+            <div style="background: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 1.2rem; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+                <div style="font-size: 1.5rem; margin-bottom: 0.4rem;">⚖️</div>
+                <div style="font-weight: 700; color: #1f2937; margin-bottom: 0.3rem; font-size: 0.95rem;">多空辩论</div>
+                <div style="color: #6b7280; font-size: 0.82rem; line-height: 1.5;">Bull vs Bear 投研辩论，风控三方评估，避免单一视角偏差</div>
+            </div>
+            <div style="background: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 1.2rem; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+                <div style="font-size: 1.5rem; margin-bottom: 0.4rem;">📊</div>
+                <div style="font-weight: 700; color: #1f2937; margin-bottom: 0.3rem; font-size: 0.95rem;">A股数据直连</div>
+                <div style="color: #6b7280; font-size: 0.82rem; line-height: 1.5;">mootdx + 东财 + 新浪 + 同花顺，全免费零门槛</div>
+            </div>
+            <div style="background: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 1.2rem; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+                <div style="font-size: 1.5rem; margin-bottom: 0.4rem;">📄</div>
+                <div style="font-weight: 700; color: #1f2937; margin-bottom: 0.3rem; font-size: 0.95rem;">精简报告输出</div>
+                <div style="color: #6b7280; font-size: 0.82rem; line-height: 1.5;">自动生成PDF与HTML精简报告，核心结论一目了然</div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # CTA + Disclaimer
+    st.markdown(
+        """
+        <div style="max-width: 900px; margin: 0 auto; padding: 0 1rem;">
+            <div style="background: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 1.2rem; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.04); margin-bottom: 1.5rem;">
+                <div style="color: #4b5563; font-size: 1rem; font-weight: 600; margin-bottom: 0.3rem;">
+                    ← 在左侧输入股票代码，开始分析
+                </div>
+                <div style="color: #9ca3af; font-size: 0.85rem;">支持6位代码或中文股票名称</div>
+            </div>
+            <div style="text-align: center; color: #9ca3af; font-size: 0.75rem; line-height: 1.6; max-width: 600px; margin: 0 auto;">
+                ⚠️ 本项目仅供学习研究与技术演示，不构成任何投资建议。<br>
+                投资决策请咨询持牌专业机构。作者不对使用本工具产生的任何损失承担责任。
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 # ── Build config ─────────────────────────────────────────────────────────────
+
+# Fixed configuration — all choices are automated per user request
+_SELECTED_ANALYSTS = [
+    "market", "social", "news", "fundamentals", "policy", "hot_money", "lockup"
+]
+
 
 def _build_config() -> dict:
     config = DEFAULT_CONFIG.copy()
-    config["llm_provider"] = st.session_state.get("llm_provider", "minimax")
-    config["deep_think_llm"] = st.session_state.get("deep_think_llm", "MiniMax-M2.7")
-    config["quick_think_llm"] = st.session_state.get("quick_think_llm", "MiniMax-M2.7-highspeed")
+    config["llm_provider"] = "minimax"
+    config["deep_think_llm"] = "MiniMax-M2.7"
+    config["quick_think_llm"] = "MiniMax-M2.7-highspeed"
     config["data_vendors"] = {
         "core_stock_apis": "a_stock",
         "technical_indicators": "a_stock",
@@ -143,8 +245,8 @@ def _build_config() -> dict:
         "news_data": "a_stock",
         "signal_data": "a_stock",
     }
-    config["max_debate_rounds"] = 1
-    config["max_risk_discuss_rounds"] = 1
+    config["max_debate_rounds"] = 5
+    config["max_risk_discuss_rounds"] = 5
     config["output_language"] = "Chinese"
     return config
 
@@ -159,16 +261,18 @@ with st.sidebar:
 
 start_req = st.session_state.pop("start_analysis", None)
 if start_req:
+    trade_date = (date.today() - timedelta(days=1)).strftime("%Y-%m-%d")
     tracker = ProgressTracker(
         ticker=start_req["ticker"],
-        trade_date=start_req["trade_date"],
+        trade_date=trade_date,
     )
     st.session_state["tracker"] = tracker
     run_analysis_in_thread(
         ticker=start_req["ticker"],
-        trade_date=start_req["trade_date"],
+        trade_date=trade_date,
         config=_build_config(),
         tracker=tracker,
+        selected_analysts=_SELECTED_ANALYSTS,
     )
 
 
@@ -191,8 +295,6 @@ if viewing_history:
 # State 2: Analysis running
 elif tracker and tracker.is_running:
     render_progress(tracker)
-    time.sleep(2)
-    st.rerun()
 
 # State 3: Analysis complete
 elif tracker and tracker.is_complete:
@@ -213,51 +315,4 @@ elif tracker and tracker.error:
 
 # State 0: Idle — welcome screen
 else:
-    st.markdown(
-        """
-        <div style="
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 60vh;
-            text-align: center;
-        ">
-            <div style="font-size: 4rem; margin-bottom: 1rem;">📈</div>
-            <div style="
-                font-size: 2.5rem;
-                font-weight: 900;
-                margin-bottom: 0.5rem;
-            ">
-                <span style="color: #ff5a1f;">Trading</span><span style="color: #f5f1eb;">Agents</span><span style="color: #f5f1eb;">-</span><span style="color: #ff5a1f;">Astock</span>
-            </div>
-            <div style="color: #888; font-size: 1.1rem; max-width: 500px; line-height: 1.6;">
-                A股多Agent投研分析系统<br>
-                7位AI分析师 → 质量门控 → 多空辩论 → 风控评估 → 最终决策
-            </div>
-            <div style="
-                margin-top: 2rem;
-                padding: 1rem 2rem;
-                border: 1px solid #222;
-                border-radius: 12px;
-                color: #666;
-                font-size: 0.9rem;
-            ">
-                ← 在左侧输入股票代码，开始分析
-            </div>
-            <div style="
-                margin-top: 2.5rem;
-                padding: 0.8rem 1.5rem;
-                color: #555;
-                font-size: 0.75rem;
-                max-width: 500px;
-                line-height: 1.6;
-                border-top: 1px solid #1a1a1a;
-            ">
-                ⚠️ 本项目仅供学习研究与技术演示，不构成任何投资建议。<br>
-                投资决策请咨询持牌专业机构。作者不对使用本工具产生的任何损失承担责任。
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    _render_welcome()

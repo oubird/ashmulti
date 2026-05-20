@@ -193,11 +193,13 @@ def _select_model(provider: str, mode: str) -> str:
             validate=lambda x: len(x.strip()) > 0 or "Please enter a deployment name.",
         ).ask().strip()
 
+    # MiniMax Anthropic-compatible uses Anthropic model catalog
+    catalog_provider = "anthropic" if provider.lower() == "minimax-anthropic" else provider
     choice = questionary.select(
         f"Select Your [{mode.title()}-Thinking LLM Engine]:",
         choices=[
             questionary.Choice(display, value=value)
-            for display, value in get_model_options(provider, mode)
+            for display, value in get_model_options(catalog_provider, mode)
         ],
         instruction="\n- Use arrow keys to navigate\n- Press Enter to select",
         style=questionary.Style(
@@ -232,6 +234,8 @@ def select_llm_provider() -> tuple[str, str | None]:
     """Select the LLM provider and its API endpoint."""
     # (display_name, provider_key, base_url)
     PROVIDERS = [
+        ("MiniMax (推荐·OpenAI兼容)", "minimax", "https://api.minimax.chat/v1"),
+        ("MiniMax (Anthropic兼容)", "minimax-anthropic", "https://api.minimaxi.com/anthropic"),
         ("OpenAI", "openai", "https://api.openai.com/v1"),
         ("Google", "google", None),
         ("Anthropic", "anthropic", "https://api.anthropic.com/"),

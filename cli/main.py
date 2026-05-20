@@ -26,6 +26,12 @@ from rich.rule import Rule
 
 from tradingagents.graph.trading_graph import TradingAgentsGraph
 from tradingagents.default_config import DEFAULT_CONFIG
+from tradingagents.reporting.compact_html_report import (
+    generate_compact_html_report,
+    get_stock_name,
+    save_compact_html_report,
+    validate_html_report,
+)
 from cli.models import AnalystType
 from cli.utils import *
 from cli.announcements import fetch_announcements, display_announcements
@@ -571,6 +577,10 @@ def get_user_selections():
     anthropic_effort = None
 
     provider_lower = selected_llm_provider.lower()
+    # MiniMax Anthropic-compatible runs through the Anthropic client
+    if provider_lower == "minimax-anthropic":
+        provider_lower = "anthropic"
+
     if provider_lower == "google":
         console.print(
             create_question_box(
@@ -601,7 +611,7 @@ def get_user_selections():
         "analysis_date": analysis_date,
         "analysts": selected_analysts,
         "research_depth": selected_research_depth,
-        "llm_provider": selected_llm_provider.lower(),
+        "llm_provider": provider_lower,
         "backend_url": backend_url,
         "shallow_thinker": selected_shallow_thinker,
         "deep_thinker": selected_deep_thinker,
@@ -1171,30 +1181,37 @@ def run_analysis(checkpoint: bool = False):
 
         update_display(layout, stats_handler=stats_handler, start_time=start_time)
 
-    # Post-analysis prompts (outside Live context for clean interaction)
+    # Post-analysis: auto-save reports (no interactive prompts)
     console.print("\n[bold cyan]Analysis Complete![/bold cyan]\n")
 
-    # Prompt to save report
-    save_choice = typer.prompt("Save report?", default="Y").strip().upper()
-    if save_choice in ("Y", "YES", ""):
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        default_path = Path.cwd() / "reports" / f"{selections['ticker']}_{timestamp}"
-        save_path_str = typer.prompt(
-            "Save path (press Enter for default)",
-            default=str(default_path)
-        ).strip()
-        save_path = Path(save_path_str)
-        try:
-            report_file = save_report_to_disk(final_state, selections["ticker"], save_path)
-            console.print(f"\n[green]✓ Report saved to:[/green] {save_path.resolve()}")
-            console.print(f"  [dim]Complete report:[/dim] {report_file.name}")
-        except Exception as e:
-            console.print(f"[red]Error saving report: {e}[/red]")
+    # 1. Auto-save original full report
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    default_path = Path.cwd() / "reports" / f"{selections['ticker']}_{timestamp}"
+    try:
+        report_file = save_report_to_disk(final_state, selections["ticker"], default_path)
+        console.print(f"[green]✓ 原始报告已保存:[/green] {default_path.resolve()}")
+        console.print(f"  [dim]完整报告:[/dim] {report_file.name}")
+    except Exception as e:
+        console.print(f"[red]保存原始报告失败: {e}[/red]")
 
-    # Prompt to display full report
-    display_choice = typer.prompt("\nDisplay full report on screen?", default="Y").strip().upper()
-    if display_choice in ("Y", "YES", ""):
-        display_complete_report(final_state)
+    # 2. Generate compact HTML report via LLM
+    ticker = selections["ticker"]
+    trade_date = selections["analysis_date"]
+    try:
+        html = generate_compact_html_report(
+            llm=graph.quick_thinking_llm,
+            final_state=final_state,
+            ticker=ticker,
+            trade_date=trade_date,
+        )
+        ok, reason = validate_html_report(html)
+        if not ok:
+            console.print(f"[yellow]⚠ HTML 报告校验警告: {reason}，仍尝试保存[/yellow]")
+        stock_name = get_stock_name(ticker)
+        html_path = save_compact_html_report(html, ticker, stock_name, trade_date)
+        console.print(f"[green]✓ 精简 HTML 报告已保存:[/green] {html_path}")
+    except Exception as e:
+        console.print(f"[red]生成精简 HTML 报告失败: {e}[/red]")
 
 
 @app.command()

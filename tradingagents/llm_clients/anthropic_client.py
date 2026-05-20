@@ -1,3 +1,4 @@
+import os
 from typing import Any, Optional
 
 from langchain_anthropic import ChatAnthropic
@@ -36,6 +37,11 @@ class AnthropicClient(BaseLLMClient):
 
         if self.base_url:
             llm_kwargs["base_url"] = self.base_url
+            # MiniMax Anthropic-compatible endpoint uses MINIMAX_API_KEY
+            if "minimaxi" in self.base_url:
+                api_key = os.environ.get("MINIMAX_API_KEY")
+                if api_key:
+                    llm_kwargs["api_key"] = api_key
 
         for key in _PASSTHROUGH_KWARGS:
             if key in self.kwargs:

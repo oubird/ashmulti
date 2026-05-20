@@ -53,18 +53,19 @@ def render_report(
     st.markdown(
         f"""
         <div style="
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-            border: 1px solid #333;
+            background: #ffffff;
+            border: 1px solid #e5e7eb;
             border-radius: 16px;
             padding: 2rem;
             text-align: center;
             margin: 1rem 0 2rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
         ">
-            <div style="font-size:0.9rem; color:#888; letter-spacing:2px;">TRADING SIGNAL</div>
+            <div style="font-size:0.9rem; color:#9ca3af; letter-spacing:2px;">TRADING SIGNAL</div>
             <div style="font-size:3.5rem; font-weight:900; color:{color}; margin:0.3rem 0;">
                 {signal.upper()}
             </div>
-            <div style="font-size:1.2rem; color:#f5f1eb;">
+            <div style="font-size:1.2rem; color:#1f2937;">
                 {ticker} · {trade_date}
             </div>
             {stats_html}
@@ -73,9 +74,19 @@ def render_report(
         unsafe_allow_html=True,
     )
 
-    st.caption("⚠️ 本报告由 AI 自动生成，仅供学习研究，不构成投资建议。")
+    st.caption("⚠️ 本报告由 AI 自动生成，仅供学习研究，不构成投资建议。", help="")
 
-    col_pdf, col_spacer = st.columns([1, 3])
+    # Resolve compact HTML report path
+    from pathlib import Path as _Path
+    from tradingagents.reporting.compact_html_report import get_stock_name, _safe_filename
+
+    stock_name = get_stock_name(ticker)
+    safe_name = _safe_filename(stock_name) if stock_name else "unknown"
+    html_file = _Path("report") / f"{_safe_filename(ticker)}_{safe_name}_{trade_date}.html"
+    html_exists = html_file.exists()
+    html_bytes = html_file.read_bytes() if html_exists else b""
+
+    col_pdf, col_html, col_spacer = st.columns([1, 1, 2])
     with col_pdf:
         pdf_bytes = generate_pdf(final_state, ticker, trade_date, signal)
         st.download_button(
@@ -85,6 +96,21 @@ def render_report(
             mime="application/pdf",
             use_container_width=True,
         )
+    with col_html:
+        if html_exists:
+            st.download_button(
+                "📄 下载精简 HTML 报告",
+                data=html_bytes,
+                file_name=f"{ticker}_{safe_name}_{trade_date}.html",
+                mime="text/html",
+                use_container_width=True,
+            )
+        else:
+            st.button(
+                "📄 精简 HTML 报告（未生成）",
+                disabled=True,
+                use_container_width=True,
+            )
 
     st.markdown("---")
 
