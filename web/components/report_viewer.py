@@ -98,14 +98,17 @@ def render_report(
         # Export button row
         col_pdf, col_html = st.columns([1, 1])
         with col_pdf:
-            pdf_bytes = generate_pdf(final_state, ticker, trade_date, signal)
-            st.download_button(
-                "📥 下载 PDF 报告",
-                data=pdf_bytes,
-                file_name=f"TradingAgents-Astock_{ticker}_{trade_date}.pdf",
-                mime="application/pdf",
-                use_container_width=True,
-            )
+            try:
+                pdf_bytes = generate_pdf(final_state, ticker, trade_date, signal)
+                st.download_button(
+                    "📥 下载 PDF 报告",
+                    data=pdf_bytes,
+                    file_name=f"TradingAgents-Astock_{ticker}_{trade_date}.pdf",
+                    mime="application/pdf",
+                    use_container_width=True,
+                )
+            except Exception:
+                st.button("📥 PDF 生成失败", disabled=True, use_container_width=True)
         with col_html:
             st.download_button(
                 "📄 导出 HTML 报告",
@@ -123,14 +126,17 @@ def render_report(
     # ── Fallback: raw markdown report ───────────────────────────────────────
     col_pdf, col_spacer = st.columns([1, 3])
     with col_pdf:
-        pdf_bytes = generate_pdf(final_state, ticker, trade_date, signal)
-        st.download_button(
-            "📥 下载 PDF 报告",
-            data=pdf_bytes,
-            file_name=f"TradingAgents-Astock_{ticker}_{trade_date}.pdf",
-            mime="application/pdf",
-            use_container_width=True,
-        )
+        try:
+            pdf_bytes = generate_pdf(final_state, ticker, trade_date, signal)
+            st.download_button(
+                "📥 下载 PDF 报告",
+                data=pdf_bytes,
+                file_name=f"TradingAgents-Astock_{ticker}_{trade_date}.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+            )
+        except Exception:
+            st.button("📥 PDF 生成失败", disabled=True, use_container_width=True)
 
     _render_raw_markdown(final_state)
 

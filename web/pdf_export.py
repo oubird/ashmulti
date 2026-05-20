@@ -11,6 +11,11 @@ from fpdf import FPDF
 
 
 _FONT_CANDIDATES = [
+    r"C:\Windows\Fonts\msyh.ttc",
+    r"C:\Windows\Fonts\msyhbd.ttc",
+    r"C:\Windows\Fonts\simhei.ttf",
+    r"C:\Windows\Fonts\simsun.ttc",
+    r"C:\Windows\Fonts\simkai.ttf",
     "/System/Library/Fonts/PingFang.ttc",
     "/System/Library/Fonts/STHeiti Light.ttc",
     "/usr/share/fonts/truetype/noto/NotoSansSC-Regular.ttf",
