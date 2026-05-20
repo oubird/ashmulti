@@ -20,6 +20,24 @@ def _format_time(seconds: float) -> str:
     return f"{m}:{s:02d}"
 
 
+def _msg_type_color(msg_type: str) -> str:
+    """Return a CSS color for each message type."""
+    return {
+        "Data": "#0891b2",      # cyan-600
+        "Agent": "#7c3aed",     # violet-600
+        "User": "#2563eb",      # blue-600
+        "System": "#6b7280",    # gray-500
+        "Control": "#9ca3af",   # gray-400
+        "Tool": "#ea580c",      # orange-600
+    }.get(msg_type, "#6b7280")
+
+
+def _truncate(text: str, max_len: int = 150) -> str:
+    if len(text) <= max_len:
+        return text
+    return text[:max_len] + "…"
+
+
 def render_progress(tracker: ProgressTracker) -> None:
     """Render the pipeline progress panel."""
 
@@ -95,6 +113,29 @@ def render_progress(tracker: ProgressTracker) -> None:
 
     if tracker.error:
         st.error(f"错误: {tracker.error}")
+
+    # ── Messages & Tools 实时日志 ──────────────────────────────────────────
+    all_logs = []
+    for ts, mtype, content in tracker.messages:
+        all_logs.append((ts, mtype, content))
+    for ts, tool_name, args_str in tracker.tool_calls_log:
+        all_logs.append((ts, "Tool", f"{tool_name}({args_str})"))
+
+    if all_logs:
+        # Sort by time (they're HH:MM:SS strings, chronological append is fine)
+        with st.expander(f"📜 Messages & Tools ({len(all_logs)})", expanded=False):
+            for ts, mtype, content in all_logs:
+                color = _msg_type_color(mtype)
+                st.markdown(
+                    f"""
+                    <div style="font-family:monospace; font-size:0.78rem; line-height:1.4; margin-bottom:0.3rem;">
+                        <span style="color:#9ca3af;">{ts}</span>
+                        <span style="color:{color}; font-weight:600; margin-left:0.4rem;">{mtype}</span>
+                        <span style="color:#374151; margin-left:0.4rem;">{_truncate(content, 200)}</span>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
 
     completed_reports = [
         (stage["name"], stage["icon"], tracker.stage_reports[stage["id"]])

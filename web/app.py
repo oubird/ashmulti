@@ -22,7 +22,7 @@ from web.components.report_viewer import render_report  # noqa: E402
 from web.components.sidebar import render_sidebar  # noqa: E402
 from web.history import extract_signal, load_analysis  # noqa: E402
 from web.progress import ProgressTracker  # noqa: E402
-from web.runner import run_analysis_in_thread  # noqa: E402
+from web.runner import get_active_tracker, run_analysis_in_thread  # noqa: E402
 
 # ── Page config ──────────────────────────────────────────────────────────────
 
@@ -279,6 +279,12 @@ if start_req:
     )
 
 
+# ── Reconnect to an active background run after page refresh ─────────────────
+if "tracker" not in st.session_state:
+    _active = get_active_tracker()
+    if _active and (_active.is_running or _active.is_complete or _active.error):
+        st.session_state["tracker"] = _active
+
 # ── Main area state machine ─────────────────────────────────────────────────
 
 tracker: ProgressTracker | None = st.session_state.get("tracker")
@@ -298,6 +304,9 @@ if viewing_history:
 # State 2: Analysis running
 elif tracker and tracker.is_running:
     render_progress(tracker)
+    import time
+    time.sleep(0.5)
+    st.rerun()
 
 # State 3: Analysis complete
 elif tracker and tracker.is_complete:

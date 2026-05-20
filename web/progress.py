@@ -25,6 +25,8 @@ PIPELINE_STAGES: list[dict[str, str]] = [
 
 STAGE_IDS = [s["id"] for s in PIPELINE_STAGES]
 
+_MAX_LOG_LINES = 100
+
 
 @dataclass
 class ProgressTracker:
@@ -49,6 +51,10 @@ class ProgressTracker:
     tool_calls: int = 0
     tokens_in: int = 0
     tokens_out: int = 0
+
+    # Real-time message / tool logs (time, type, content)
+    messages: list[tuple[str, str, str]] = field(default_factory=list)
+    tool_calls_log: list[tuple[str, str, str]] = field(default_factory=list)
 
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
@@ -82,6 +88,21 @@ class ProgressTracker:
             self.tool_calls = tool
             self.tokens_in = tok_in
             self.tokens_out = tok_out
+
+    def add_message(self, msg_type: str, content: str) -> None:
+        with self._lock:
+            ts = time.strftime("%H:%M:%S")
+            self.messages.append((ts, msg_type, content))
+            if len(self.messages) > _MAX_LOG_LINES:
+                self.messages = self.messages[-_MAX_LOG_LINES:]
+
+    def add_tool_call(self, tool_name: str, args: dict) -> None:
+        with self._lock:
+            ts = time.strftime("%H:%M:%S")
+            args_str = ", ".join(f"{k}={v}" for k, v in args.items())
+            self.tool_calls_log.append((ts, tool_name, args_str))
+            if len(self.tool_calls_log) > _MAX_LOG_LINES:
+                self.tool_calls_log = self.tool_calls_log[-_MAX_LOG_LINES:]
 
     @property
     def elapsed(self) -> float:
