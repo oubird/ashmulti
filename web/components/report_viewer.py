@@ -1,12 +1,14 @@
-"""Render the completed analysis report with expandable sections and PDF download."""
+"""Render the completed analysis report with HTML preview and export."""
 
 from __future__ import annotations
 
 import re
+from pathlib import Path as _Path
 from typing import Any
 
 import streamlit as st
 
+from tradingagents.reporting.compact_html_report import get_stock_name, _safe_filename
 from web.pdf_export import generate_pdf
 
 
@@ -32,6 +34,16 @@ _ANALYST_SECTIONS = [
     ("hot_money_report", "🔥 游资追踪"),
     ("lockup_report", "🔒 解禁/减持"),
 ]
+
+
+def _resolve_html_report(ticker: str, trade_date: str) -> tuple[bool, bytes, str]:
+    """Return (exists, bytes, suggested_filename) for the compact HTML report."""
+    stock_name = get_stock_name(ticker)
+    safe_name = _safe_filename(stock_name) if stock_name else "unknown"
+    html_file = _Path("report") / f"{_safe_filename(ticker)}_{safe_name}_{trade_date}.html"
+    if html_file.exists():
+        return True, html_file.read_bytes(), f"{ticker}_{safe_name}_{trade_date}.html"
+    return False, b"", ""
 
 
 def render_report(
@@ -76,17 +88,40 @@ def render_report(
 
     st.caption("⚠️ 本报告由 AI 自动生成，仅供学习研究，不构成投资建议。", help="")
 
-    # Resolve compact HTML report path
-    from pathlib import Path as _Path
-    from tradingagents.reporting.compact_html_report import get_stock_name, _safe_filename
+    # ── Try compact HTML report first ───────────────────────────────────────
+    html_exists, html_bytes, html_filename = _resolve_html_report(ticker, trade_date)
 
-    stock_name = get_stock_name(ticker)
-    safe_name = _safe_filename(stock_name) if stock_name else "unknown"
-    html_file = _Path("report") / f"{_safe_filename(ticker)}_{safe_name}_{trade_date}.html"
-    html_exists = html_file.exists()
-    html_bytes = html_file.read_bytes() if html_exists else b""
+    if html_exists:
+        # Render HTML directly in an iframe
+        st.components.v1.html(html_bytes.decode("utf-8"), height=900, scrolling=True)
 
-    col_pdf, col_html, col_spacer = st.columns([1, 1, 2])
+        # Export button row
+        col_pdf, col_html = st.columns([1, 1])
+        with col_pdf:
+            pdf_bytes = generate_pdf(final_state, ticker, trade_date, signal)
+            st.download_button(
+                "📥 下载 PDF 报告",
+                data=pdf_bytes,
+                file_name=f"TradingAgents-Astock_{ticker}_{trade_date}.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+            )
+        with col_html:
+            st.download_button(
+                "📄 导出 HTML 报告",
+                data=html_bytes,
+                file_name=html_filename,
+                mime="text/html",
+                use_container_width=True,
+            )
+
+        # Optional: keep raw markdown in a collapsed expander for reference
+        with st.expander("🔍 查看原始分析报告", expanded=False):
+            _render_raw_markdown(final_state)
+        return
+
+    # ── Fallback: raw markdown report ───────────────────────────────────────
+    col_pdf, col_spacer = st.columns([1, 3])
     with col_pdf:
         pdf_bytes = generate_pdf(final_state, ticker, trade_date, signal)
         st.download_button(
@@ -96,24 +131,12 @@ def render_report(
             mime="application/pdf",
             use_container_width=True,
         )
-    with col_html:
-        if html_exists:
-            st.download_button(
-                "📄 下载精简 HTML 报告",
-                data=html_bytes,
-                file_name=f"{ticker}_{safe_name}_{trade_date}.html",
-                mime="text/html",
-                use_container_width=True,
-            )
-        else:
-            st.button(
-                "📄 精简 HTML 报告（未生成）",
-                disabled=True,
-                use_container_width=True,
-            )
 
-    st.markdown("---")
+    _render_raw_markdown(final_state)
 
+
+def _render_raw_markdown(final_state: dict[str, Any]) -> None:
+    """Render the raw multi-agent markdown report (fallback)."""
     inv_plan = final_state.get("investment_plan", "")
     if inv_plan:
         st.markdown("### 👔 最终投资建议")

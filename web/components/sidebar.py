@@ -73,6 +73,18 @@ def render_sidebar() -> None:
                 }
                 st.session_state["viewing_history"] = None
 
+    if is_busy:
+        if st.button(
+            "⏹ 停止分析",
+            use_container_width=True,
+            type="secondary",
+        ):
+            from web.runner import request_stop
+            request_stop()
+            st.session_state.pop("tracker", None)
+            st.session_state.pop("start_analysis", None)
+            st.rerun()
+
     st.markdown("---")
     st.markdown("#### 历史记录")
 

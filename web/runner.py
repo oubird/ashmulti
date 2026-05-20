@@ -19,11 +19,17 @@ _ANALYST_REPORT_KEYS = [
 # Global references so the UI can reconnect after a page refresh
 _GLOBAL_TRACKER: ProgressTracker | None = None
 _GLOBAL_THREAD: threading.Thread | None = None
+_STOP_EVENT = threading.Event()
 
 
 def get_active_tracker() -> ProgressTracker | None:
     """Return the globally stored tracker if a run is still active."""
     return _GLOBAL_TRACKER
+
+
+def request_stop() -> None:
+    """Signal the background runner to stop at the next chunk boundary."""
+    _STOP_EVENT.set()
 
 
 def _strip_think_tags(text: str) -> str:
@@ -174,6 +180,9 @@ def _run(
     last_chunk: dict[str, Any] = {}
 
     for chunk in graph.graph.stream(init_state, **args):
+        if _STOP_EVENT.is_set():
+            tracker.mark_error("用户已取消")
+            break
         last_chunk = chunk
         _detect_completed_stages(chunk, tracker)
         _infer_active_stage(tracker)
@@ -221,6 +230,7 @@ def run_analysis_in_thread(
     """Launch the pipeline in a daemon thread. Returns the thread handle."""
     global _GLOBAL_TRACKER, _GLOBAL_THREAD
 
+    _STOP_EVENT.clear()
     tracker.ticker = ticker
     tracker.trade_date = trade_date
     tracker.is_running = True
