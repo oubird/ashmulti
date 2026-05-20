@@ -1,15 +1,16 @@
-"""Render the completed analysis report with HTML preview and export."""
+"""Render the completed analysis report with summary panel and export buttons."""
 
 from __future__ import annotations
 
+import io
 import re
+import zipfile
 from pathlib import Path as _Path
 from typing import Any
 
 import streamlit as st
 
 from tradingagents.reporting.compact_html_report import get_stock_name, _safe_filename
-from web.pdf_export import generate_pdf
 
 
 def _strip_think(text: str) -> str:
@@ -46,6 +47,17 @@ def _resolve_html_report(ticker: str, trade_date: str) -> tuple[bool, bytes, str
     return False, b"", ""
 
 
+def _build_analyst_reports_zip(final_state: dict[str, Any]) -> bytes:
+    """Pack the 7 analyst raw reports into a single zip file."""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for key, title in _ANALYST_SECTIONS:
+            content = final_state.get(key, "")
+            if content:
+                zf.writestr(f"{title}.md", str(content))
+    return buf.getvalue()
+
+
 def render_report(
     final_state: dict[str, Any],
     ticker: str,
@@ -56,93 +68,70 @@ def render_report(
     """Render the full analysis report."""
 
     color, cn_signal = _signal_style(signal)
+    stock_name = get_stock_name(ticker) or ""
 
-    stats_html = ""
+    # ── Header: investment summary ──────────────────────────────────────────
+    elapsed_str = ""
     if elapsed is not None:
         m, s = divmod(int(elapsed), 60)
-        stats_html = f'<div style="font-size:0.9rem; color:#888; margin-top:0.3rem;">耗时 {m}:{s:02d}</div>'
+        elapsed_str = f"共耗时{m}分{s:02d}秒" if m > 0 else f"共耗时{s}秒"
+
+    header_line = f"{ticker} {stock_name}  投资评级：{cn_signal}（{signal.upper()}）  评测时间{trade_date}"
+    if elapsed_str:
+        header_line += f"  {elapsed_str}"
 
     st.markdown(
         f"""
-        <div style="
-            background: #ffffff;
-            border: 1px solid #e5e7eb;
-            border-radius: 16px;
-            padding: 2rem;
-            text-align: center;
-            margin: 1rem 0 2rem;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-        ">
-            <div style="font-size:0.9rem; color:#9ca3af; letter-spacing:2px;">TRADING SIGNAL</div>
-            <div style="font-size:3.5rem; font-weight:900; color:{color}; margin:0.3rem 0;">
-                {signal.upper()}
+        <div style="background:#ffffff; border:1px solid #e5e7eb; border-radius:12px; padding:1.2rem 1.5rem; margin:1rem 0 1.5rem;">
+            <div style="font-size:1.05rem; font-weight:700; color:#1f2937; margin-bottom:0.8rem;">
+                {header_line}
             </div>
-            <div style="font-size:1.2rem; color:#1f2937;">
-                {ticker} · {trade_date}
-            </div>
-            {stats_html}
         </div>
         """,
         unsafe_allow_html=True,
     )
 
+    # Core content: final trade decision
+    final_decision = final_state.get("final_trade_decision", "")
+    if final_decision:
+        st.markdown(_strip_think(str(final_decision)))
+    else:
+        st.info("暂无最终投资建议")
+
+    st.markdown("---")
     st.caption("⚠️ 本报告由 AI 自动生成，仅供学习研究，不构成投资建议。", help="")
 
-    # ── Try compact HTML report first ───────────────────────────────────────
+    # ── Export buttons ──────────────────────────────────────────────────────
     html_exists, html_bytes, html_filename = _resolve_html_report(ticker, trade_date)
+    zip_bytes = _build_analyst_reports_zip(final_state)
 
-    if html_exists:
-        # Render HTML directly in an iframe
-        st.components.v1.html(html_bytes.decode("utf-8"), height=900, scrolling=True)
-
-        # Export button row
-        col_pdf, col_html = st.columns([1, 1])
-        with col_pdf:
-            try:
-                pdf_bytes = generate_pdf(final_state, ticker, trade_date, signal)
-                st.download_button(
-                    "📥 下载 PDF 报告",
-                    data=pdf_bytes,
-                    file_name=f"TradingAgents-Astock_{ticker}_{trade_date}.pdf",
-                    mime="application/pdf",
-                    use_container_width=True,
-                )
-            except Exception:
-                st.button("📥 PDF 生成失败", disabled=True, use_container_width=True)
-        with col_html:
+    col_summary, col_analyst = st.columns([1, 1])
+    with col_summary:
+        if html_exists:
             st.download_button(
-                "📄 导出 HTML 报告",
+                "📄 下载总结报告",
                 data=html_bytes,
                 file_name=html_filename,
                 mime="text/html",
                 use_container_width=True,
             )
+        else:
+            st.button("📄 总结报告未生成", disabled=True, use_container_width=True)
+    with col_analyst:
+        st.download_button(
+            "📊 下载分析师报告",
+            data=zip_bytes,
+            file_name=f"{ticker}_分析师报告_{trade_date}.zip",
+            mime="application/zip",
+            use_container_width=True,
+        )
 
-        # Optional: keep raw markdown in a collapsed expander for reference
-        with st.expander("🔍 查看原始分析报告", expanded=False):
-            _render_raw_markdown(final_state)
-        return
-
-    # ── Fallback: raw markdown report ───────────────────────────────────────
-    col_pdf, col_spacer = st.columns([1, 3])
-    with col_pdf:
-        try:
-            pdf_bytes = generate_pdf(final_state, ticker, trade_date, signal)
-            st.download_button(
-                "📥 下载 PDF 报告",
-                data=pdf_bytes,
-                file_name=f"TradingAgents-Astock_{ticker}_{trade_date}.pdf",
-                mime="application/pdf",
-                use_container_width=True,
-            )
-        except Exception:
-            st.button("📥 PDF 生成失败", disabled=True, use_container_width=True)
-
+    # ── Raw multi-agent reports (unchanged) ────────────────────────────────
     _render_raw_markdown(final_state)
 
 
 def _render_raw_markdown(final_state: dict[str, Any]) -> None:
-    """Render the raw multi-agent markdown report (fallback)."""
+    """Render the raw multi-agent markdown report sections."""
     inv_plan = final_state.get("investment_plan", "")
     if inv_plan:
         st.markdown("### 👔 最终投资建议")
