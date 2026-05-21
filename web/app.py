@@ -126,13 +126,13 @@ st.markdown(
     }
 
     /* ── Top navigation bar ────────────────────────────────────────────── */
-    div[data-testid="stHorizontalBlock"]:first-of-type {
+    div[data-testid="stHorizontalBlock"]:has(.nav-brand) {
         background: #ff5a1f !important;
         padding: 0.8rem 1.5rem !important;
         margin: -1rem -1rem 1.5rem -1rem !important;
         border-radius: 0 !important;
     }
-    div[data-testid="stHorizontalBlock"]:first-of-type button {
+    div[data-testid="stHorizontalBlock"]:has(.nav-brand) button {
         background: transparent !important;
         color: white !important;
         border: none !important;
@@ -140,13 +140,17 @@ st.markdown(
         font-weight: 600 !important;
         letter-spacing: 0.02em !important;
     }
-    div[data-testid="stHorizontalBlock"]:first-of-type button:hover {
+    div[data-testid="stHorizontalBlock"]:has(.nav-brand) button:hover {
         background: rgba(255,255,255,0.15) !important;
     }
-    div[data-testid="stHorizontalBlock"]:first-of-type button:active {
+    div[data-testid="stHorizontalBlock"]:has(.nav-brand) button:active {
         background: rgba(255,255,255,0.25) !important;
     }
-    div[data-testid="stHorizontalBlock"]:first-of-type button * {
+    div[data-testid="stHorizontalBlock"]:has(.nav-brand) button:focus {
+        outline: none !important;
+        box-shadow: none !important;
+    }
+    div[data-testid="stHorizontalBlock"]:has(.nav-brand) button * {
         color: white !important;
     }
     </style>
@@ -159,10 +163,10 @@ st.markdown(
 
 def _render_top_nav() -> None:
     """Render the top orange navigation bar."""
-    cols = st.columns([4, 1, 1, 1])
+    cols = st.columns([3, 1, 1, 1, 2])
     with cols[0]:
         st.markdown(
-            '<span style="color:white; font-size:1.3rem; font-weight:700;">A股多专家分析系统</span>',
+            '<span class="nav-brand" style="color:white; font-size:1.3rem; font-weight:700;">A股多专家分析系统</span>',
             unsafe_allow_html=True,
         )
     with cols[1]:
@@ -180,6 +184,8 @@ def _render_top_nav() -> None:
             st.session_state["current_page"] = "new"
             st.session_state.pop("viewing_history", None)
             st.rerun()
+    with cols[4]:
+        st.empty()
 
 
 # ── Welcome screen helper ───────────────────────────────────────────────────
@@ -342,20 +348,28 @@ def _render_history_page() -> None:
         st.info("暂无历史分析记录")
         return
 
+    # White card container
+    st.markdown(
+        """
+        <div style="background:#ffffff; border:1px solid #e5e7eb; border-radius:12px; overflow:hidden; margin-bottom:1.5rem;">
+        """,
+        unsafe_allow_html=True,
+    )
+
     # Header row
     hdr_col1, hdr_col2, hdr_col3, hdr_col4 = st.columns([3, 2, 2, 1])
     with hdr_col1:
-        st.markdown("**报告名称**")
+        st.markdown("<span style='color:#374151; font-weight:600; font-size:0.9rem;'>报告名称</span>", unsafe_allow_html=True)
     with hdr_col2:
-        st.markdown("**分析日期**")
+        st.markdown("<span style='color:#374151; font-weight:600; font-size:0.9rem;'>分析日期</span>", unsafe_allow_html=True)
     with hdr_col3:
-        st.markdown("**分析耗时**")
+        st.markdown("<span style='color:#374151; font-weight:600; font-size:0.9rem;'>分析耗时</span>", unsafe_allow_html=True)
     with hdr_col4:
-        st.markdown("**操作**")
+        st.markdown("<span style='color:#374151; font-weight:600; font-size:0.9rem;'>操作</span>", unsafe_allow_html=True)
 
-    st.markdown("<hr style='margin: 0.3rem 0; border: none; border-top: 1px solid #e5e7eb;'>", unsafe_allow_html=True)
+    st.markdown("<div style='height:0.5rem; background:#f8f9fa; margin:0 -1rem;'></div>", unsafe_allow_html=True)
 
-    for entry in history:
+    for i, entry in enumerate(history):
         ticker = entry["ticker"]
         name = entry["name"]
         date_str = entry["date"]
@@ -364,18 +378,21 @@ def _render_history_page() -> None:
 
         col1, col2, col3, col4 = st.columns([3, 2, 2, 1])
         with col1:
-            st.markdown(f"<span style='color:#1f2937;'>{display_name}</span>", unsafe_allow_html=True)
+            st.markdown(f"<span style='color:#1f2937; font-weight:500;'>{display_name}</span>", unsafe_allow_html=True)
         with col2:
-            st.caption(date_str)
+            st.markdown(f"<span style='color:#6b7280; font-size:0.9rem;'>{date_str}</span>", unsafe_allow_html=True)
         with col3:
-            st.caption(elapsed)
+            st.markdown(f"<span style='color:#6b7280; font-size:0.9rem;'>{elapsed}</span>", unsafe_allow_html=True)
         with col4:
-            if st.button("查看", key=f"view_{ticker}_{date_str}"):
+            if st.button("查看", key=f"view_{ticker}_{date_str}", type="secondary"):
                 st.session_state["viewing_history"] = entry["path"]
                 st.session_state["current_page"] = "home"
                 st.rerun()
 
-        st.markdown("<hr style='margin: 0.2rem 0; border: none; border-top: 1px solid #f3f4f6;'>", unsafe_allow_html=True)
+        if i < len(history) - 1:
+            st.markdown("<div style='height:1px; background:#f3f4f6; margin:0 -1rem;'></div>", unsafe_allow_html=True)
+
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 # ── New analysis page ────────────────────────────────────────────────────────
