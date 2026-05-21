@@ -26,6 +26,8 @@ from web.runner import get_active_tracker, request_stop, run_analysis_in_thread 
 
 # ── Page config ──────────────────────────────────────────────────────────────
 
+_VERSION = "V1.0.0"
+
 st.set_page_config(
     page_title="A股多专家投研系统",
     page_icon="📈",
@@ -182,7 +184,8 @@ def _render_top_nav() -> None:
     cols = st.columns([3, 1, 1, 1, 2])
     with cols[0]:
         st.markdown(
-            '<span class="nav-brand" style="color:white; font-size:1.3rem; font-weight:700;">A股多专家分析系统</span>',
+            f'<span class="nav-brand" style="color:white; font-size:1.3rem; font-weight:700;">A股多专家分析系统</span>'
+            f'<span style="color:white; font-size:0.75rem; opacity:0.85; margin-left:0.5rem;">{_VERSION}</span>',
             unsafe_allow_html=True,
         )
     with cols[1]:
