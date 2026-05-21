@@ -65,3 +65,27 @@ deepseek-v4-flash 等模型在 tool call 时可能返回中文股票名而非 6 
 ## 相关项目
 - [a-stock-data](https://github.com/simonlin1212/a-stock-data) — A 股 MCP 数据服务（Codex 用的 skill）
 - 上游 [TauricResearch/TradingAgents](https://github.com/TauricResearch/TradingAgents) — 原版框架
+
+---
+
+## 版本管理与提交流程（必须遵循）
+
+> **这是本项目的强制工作流，任何代码修改后都必须严格执行。**
+
+### 版本号规则
+- 版本号格式：`V{major}.{minor}.{patch}`，当前从 **V1.0.0** 开始
+- 版本号常量定义在 `web/app.py` 顶部的 `_VERSION`
+- 首页导航栏会显示版本号：`A股多专家分析系统 V1.x.x`
+
+### 每次修改后的强制步骤
+1. **递增版本号**：`web/app.py` 中的 `_VERSION` patch +1（如 V1.0.0 → V1.0.1）
+2. **更新 README**：在 `README.md`「版本记录」章节追加新版本和修改内容
+3. **运行测试**：`python -m pytest tests/ -q` 确保通过
+4. **Git 提交**：`git add -A && git commit -m "release: V1.0.x — 修改简述"`
+5. **推送远端**：`git push ashmulti main`（远端仓库：`https://github.com/oubird/ashmulti.git`）
+
+### 远端仓库
+```bash
+git remote add ashmulti https://github.com/oubird/ashmulti.git  # 如未添加
+git push ashmulti main
+```
