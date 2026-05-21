@@ -26,7 +26,7 @@ from web.runner import get_active_tracker, request_stop, run_analysis_in_thread 
 
 # ── Page config ──────────────────────────────────────────────────────────────
 
-_VERSION = "V1.0.0"
+_VERSION = "V1.0.1"
 
 st.set_page_config(
     page_title="A股多专家投研系统",

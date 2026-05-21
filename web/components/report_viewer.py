@@ -243,18 +243,21 @@ def render_report(
             use_container_width=True,
         )
 
-    # ── Compact HTML summary report (embedded, no iframe) ──────────────────
-    if html_exists:
-        st.html(_clean_html_for_embed(html_bytes.decode("utf-8")))
-    else:
-        st.info("总结报告尚未生成")
+    # ── Centered content area ──────────────────────────────────────────────
+    _l_spacer, content_col, _r_spacer = st.columns([1, 6, 1])
+    with content_col:
+        # ── Compact HTML summary report (embedded, no iframe) ──────────────
+        if html_exists:
+            st.html(_clean_html_for_embed(html_bytes.decode("utf-8")))
+        else:
+            st.info("总结报告尚未生成")
 
-    # ── Raw multi-agent reports ────────────────────────────────────────────
-    _render_raw_markdown(final_state, ticker, trade_date)
+        # ── Raw multi-agent reports ────────────────────────────────────────
+        _render_raw_markdown(final_state, ticker, trade_date)
 
-    # ── Disclaimer at bottom ───────────────────────────────────────────────
-    st.markdown("---")
-    st.caption("⚠️ 本报告由 AI 自动生成，仅供学习研究，不构成投资建议。", help="")
+        # ── Disclaimer at bottom ───────────────────────────────────────────
+        st.markdown("---")
+        st.caption("⚠️ 本报告由 AI 自动生成，仅供学习研究，不构成投资建议。", help="")
 
 
 def _render_raw_markdown(final_state: dict[str, Any], ticker: str, trade_date: str) -> None:
