@@ -10,7 +10,12 @@ from typing import Any
 
 import streamlit as st
 
-from tradingagents.reporting.compact_html_report import get_stock_name, _safe_filename, _report_dir
+from tradingagents.reporting.compact_html_report import (
+    get_stock_name,
+    _safe_filename,
+    _report_dir,
+    _strengthen_compact_header_title_color,
+)
 from tradingagents.reporting.risk_html_report import _resolve_risk_html_report
 
 
@@ -148,12 +153,67 @@ def _inject_copy_guard() -> None:
     st.html(_copy_guard_html(), unsafe_allow_javascript=True, width="content")
 
 
+def _fix_dark_title_text_color(html: str) -> str:
+    """Heuristic fix: ensure the first dark-background title area has white text.
+
+    LLM-generated HTML often sets a dark background for the title/header
+    but omits an explicit ``color``, causing it to inherit Streamlit's
+    default dark text and become invisible.
+    """
+    # Pattern: match the first div/header/section that has a dark background color
+    dark_bg_pattern = re.compile(
+        r'(<(?:div|header|section)\b[^>]*?\s)style="([^"]*?'
+        r'background(?:-color)?\s*:\s*'
+        r'(?:#[12][0-9a-fA-F]{5}|#[0-2][0-9a-fA-F]{2,5}\b'
+        r'|rgb\s*\(\s*(?:0|1\d|2[0-5])'
+        r'|hsl\s*\(\s*(?:\d+)\s*,\s*\d+%\s*,\s*(?:0|1\d|2[0-5])%)'
+        r'[^"]*?)"',
+        re.IGNORECASE,
+    )
+
+    def _replacer(match: re.Match[str]) -> str:
+        prefix = match.group(1)
+        style = match.group(2)
+
+        # Split into individual declarations so we don't accidentally match
+        # "background-color:" when looking for standalone "color:"
+        declarations = [d.strip() for d in style.split(';') if d.strip()]
+
+        has_color = any(d.lower().startswith('color:') for d in declarations)
+
+        if not has_color:
+            declarations.insert(0, 'color: #ffffff !important')
+        else:
+            for i, decl in enumerate(declarations):
+                if decl.lower().startswith('color:'):
+                    # Check if the color value is dark
+                    val = decl[len('color:'):].strip().lower()
+                    is_dark = (
+                        val == 'black'
+                        or re.match(r'#0{3,6}\b', val)
+                        or re.match(r'#[0-3][0-9a-f]{5}\b', val)
+                        or re.match(r'#[0-3]{3}\b', val)
+                        or re.match(r'rgb\s*\(\s*(?:0|1\d|2[0-5])', val)
+                        or re.match(r'hsl\s*\(\s*\d+\s*,\s*\d+%\s*,\s*(?:0|1\d|2[0-5])%', val)
+                    )
+                    if is_dark:
+                        declarations[i] = 'color: #ffffff !important'
+                    break
+
+        new_style = '; '.join(declarations)
+        return f'{prefix}style="{new_style}"'
+
+    return dark_bg_pattern.sub(_replacer, html, count=1)
+
+
 def _clean_html_for_embed(html: str) -> str:
     """Remove full-document tags so the HTML can be embedded inline."""
     html = re.sub(r"<!DOCTYPE[^>]*>", "", html, flags=re.IGNORECASE)
     html = re.sub(r"</?html[^>]*>", "", html, flags=re.IGNORECASE)
     html = re.sub(r"</?head[^>]*>", "", html, flags=re.IGNORECASE)
     html = re.sub(r"</?body[^>]*>", "", html, flags=re.IGNORECASE)
+    html = _fix_dark_title_text_color(html)
+    html = _strengthen_compact_header_title_color(html)
     return f'<div class="report-embed">{html.strip()}</div>{_report_table_css()}'
 
 

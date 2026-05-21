@@ -20,7 +20,7 @@ load_dotenv(_PROJECT_ROOT / ".env")
 from tradingagents.default_config import DEFAULT_CONFIG  # noqa: E402
 
 from web.components.progress_panel import render_progress  # noqa: E402
-from web.components.report_viewer import render_report  # noqa: E402
+from web.components.report_viewer import render_report, _inject_copy_guard  # noqa: E402
 from web.components.task_viewer import render_task_detail  # noqa: E402
 from web.components.sidebar import _resolve_user_input  # noqa: E402
 from web.history import extract_signal, get_history, load_analysis  # noqa: E402
@@ -53,7 +53,7 @@ from web.auth_store import (  # noqa: E402
 
 # ── Page config ──────────────────────────────────────────────────────────────
 
-_VERSION = "V1.0.6"
+_VERSION = "V1.0.7"
 
 st.set_page_config(
     page_title="A股多专家投研系统",
@@ -202,6 +202,10 @@ st.markdown(
     }
     div[data-testid="stHorizontalBlock"]:has(.nav-brand) button * {
         color: white !important;
+    }
+    /* Hide "Press Enter to submit form" hint inside forms */
+    div[data-testid="InputInstructions"] {
+        display: none !important;
     }
     </style>
     """,
@@ -447,6 +451,11 @@ def _load_history_report_state(viewing_history: Any) -> tuple[dict[str, Any], st
                         state = load_analysis(str(final_path))
                         return state, ticker, trade_date, extract_signal(state)
 
+            # If the task JSON itself does not exist, fall back to next candidate
+            # (e.g. log_path pointing to a real full_states_log_*.json)
+            if not source_path.exists():
+                continue
+
             state = load_analysis(str(source_path))
             ticker = source_path.parent.parent.name if source_path.name.startswith("full_states_log_") else source_path.parent.name
             trade_date = source_path.stem.replace("full_states_log_", "")
@@ -480,28 +489,31 @@ def _render_login() -> None:
         unsafe_allow_html=True,
     )
 
-    # Use a form so inputs are grouped
-    with st.form("login_form", clear_on_submit=False):
-        username = st.text_input("用户名", placeholder="admin 或 xuliang")
-        password = st.text_input("密码", type="password", placeholder="初始密码: Admin@123!")
-        submitted = st.form_submit_button("登录", use_container_width=True, type="primary")
+    # Centered narrow form aligned with title card (~400px)
+    c1, c2, c3 = st.columns([1, 1, 1])
+    with c2:
+        with st.form("login_form", clear_on_submit=False):
+            username = st.text_input("用户名", placeholder="请输入用户名")
+            password = st.text_input("密码", type="password", placeholder="请输入密码")
+            submitted = st.form_submit_button("登录", use_container_width=True, type="primary")
 
-    if submitted:
-        if not username or not password:
-            st.error("请输入用户名和密码")
-            return
-        user = verify_password(username.strip(), password)
-        if user is None:
-            st.error("用户名或密码错误，或账号已禁用")
-            return
-        st.session_state["auth_user"] = user
-        if user.get("must_change_password"):
-            st.session_state["current_page"] = "force_change_password"
-        elif user.get("role") == "admin":
-            st.session_state["current_page"] = "admin"
-        else:
-            st.session_state["current_page"] = "home"
-        st.rerun()
+        if submitted:
+            if not username or not password:
+                st.error("请输入用户名和密码")
+            else:
+                user = verify_password(username.strip(), password)
+                if user is None:
+                    st.error("用户名或密码错误")
+                else:
+                    st.session_state["auth_user"] = user
+                    if user.get("must_change_password"):
+                        st.session_state["current_page"] = "force_change_password"
+                    elif user.get("role") == "admin":
+                        st.session_state["current_page"] = "admin"
+                    else:
+                        st.session_state["current_page"] = "home"
+                    st.rerun()
+        return
 
 
 # ── Force change password page ───────────────────────────────────────────────
@@ -527,11 +539,13 @@ def _render_force_change_password() -> None:
         unsafe_allow_html=True,
     )
 
-    with st.form("force_change_password_form"):
-        old_pwd = st.text_input("旧密码", type="password")
-        new_pwd = st.text_input("新密码", type="password")
-        confirm_pwd = st.text_input("确认新密码", type="password")
-        submitted = st.form_submit_button("确认修改", use_container_width=True, type="primary")
+    c1, c2, c3 = st.columns([1, 1, 1])
+    with c2:
+        with st.form("force_change_password_form"):
+            old_pwd = st.text_input("旧密码", type="password")
+            new_pwd = st.text_input("新密码", type="password")
+            confirm_pwd = st.text_input("确认新密码", type="password")
+            submitted = st.form_submit_button("确认修改", use_container_width=True, type="primary")
 
     if submitted:
         if not old_pwd or not new_pwd or not confirm_pwd:
@@ -665,11 +679,13 @@ def _render_change_password() -> None:
         return
 
     st.markdown("### 🔐 修改密码")
-    with st.form("change_password_form"):
-        old_pwd = st.text_input("旧密码", type="password")
-        new_pwd = st.text_input("新密码", type="password")
-        confirm_pwd = st.text_input("确认新密码", type="password")
-        submitted = st.form_submit_button("确认修改", use_container_width=True, type="primary")
+    c1, c2, c3 = st.columns([1, 1, 1])
+    with c2:
+        with st.form("change_password_form"):
+            old_pwd = st.text_input("旧密码", type="password")
+            new_pwd = st.text_input("新密码", type="password")
+            confirm_pwd = st.text_input("确认新密码", type="password")
+            submitted = st.form_submit_button("确认修改", use_container_width=True, type="primary")
 
     if submitted:
         if not old_pwd or not new_pwd or not confirm_pwd:
@@ -1164,6 +1180,9 @@ else:
 
 
 # ── Render top nav + page content ────────────────────────────────────────────
+
+# Install copy guard globally (prevents Streamlit clear-cache popup on Ctrl+C)
+_inject_copy_guard()
 
 if current_page != "login":
     _render_top_nav()

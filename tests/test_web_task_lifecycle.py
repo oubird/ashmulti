@@ -172,6 +172,50 @@ class TestWebTaskHistory(unittest.TestCase):
 
             self.assertNotIn((ticker, trade_date), {(entry["ticker"], entry["date"]): entry for entry in history})
 
+    def test_history_log_fallback_when_task_json_missing(self) -> None:
+        """task_path missing but log_path exists → should fallback to log without error."""
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            results_dir = home / ".tradingagents" / "logs"
+            results_dir.mkdir(parents=True, exist_ok=True)
+
+            ticker = "000001"
+            trade_date = "2026-05-20"
+            log_dir = results_dir / ticker / "TradingAgentsStrategy_logs"
+            log_dir.mkdir(parents=True, exist_ok=True)
+            log_path = log_dir / f"full_states_log_{trade_date}.json"
+            log_path.write_text(
+                json.dumps({"stock_name": "FallbackCo", "final_trade_decision": "BUY"}, ensure_ascii=False),
+                encoding="utf-8",
+            )
+
+            # task_path points to a non-existent JSON
+            fake_task_path = home / ".tradingagents" / "web_tasks" / ticker / f"{trade_date}.json"
+
+            viewing_history = {
+                "ticker": ticker,
+                "date": trade_date,
+                "task_path": str(fake_task_path),
+                "log_path": str(log_path),
+                "path": str(log_path),
+                "view_path": str(log_path),
+            }
+
+            with patch("pathlib.Path.home", return_value=home):
+                # Import under a mocked streamlit to avoid set_page_config side effects
+                mock_st = MagicMock()
+                mock_st.session_state.pop.return_value = None
+                with patch.dict("sys.modules", {"streamlit": mock_st}), patch(
+                    "web.components.report_viewer._inject_copy_guard"
+                ):
+                    from web.app import _load_history_report_state
+                    state, ret_ticker, ret_date, signal = _load_history_report_state(viewing_history)
+
+            self.assertEqual(ret_ticker, ticker)
+            self.assertEqual(ret_date, trade_date)
+            self.assertEqual(state.get("stock_name"), "FallbackCo")
+            self.assertEqual(signal, "Buy")
+
     def test_legacy_cli_task_with_md_artifacts_appears_and_is_repairable(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)

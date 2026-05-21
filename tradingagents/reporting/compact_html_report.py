@@ -110,7 +110,7 @@ COMPACT_HTML_REPORT_PROMPT = """你是一个专业的 A 股投研报告整理员
 ## 视觉要求
 
 - 使用专业的投研报告风格，白底黑字，配色克制。
-- 标题区可以用深色背景 + 白色文字，突出信号颜色（买入=绿色、卖出=红色、持有=橙色/黄色）。
+- 标题区必须使用深色背景（如 `#1a1f3c`、`#1e3a5f`、`#0f172a`）+ **白色文字（`color: #ffffff !important;`）**。其中股票名称所在的 `<h1>` 也必须显式写白字，不能只依赖父级继承。严禁在标题区使用黑色、`#000000`、深灰色等暗色文字，否则在 Streamlit 等浅色主题页面上会继承默认深色文字，导致深色背景上的文字完全不可见。信号颜色用于买入=绿色、卖出=红色、持有=橙色/黄色。
 - 表格要有清晰的边框和交替行背景色。
 - 风险区域用浅红色背景 + 深红色边框。
 - 字体使用系统默认无衬线字体（font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif）。
@@ -284,6 +284,21 @@ def strip_markdown_code_fence(text: str) -> str:
     return t
 
 
+def _strengthen_compact_header_title_color(html: str) -> str:
+    """Force the compact report title to stay white inside Streamlit embeds.
+
+    The generated compact report relies on the header container inheriting white
+    text. In Streamlit embeds, later heading rules can still win on the ``h1``
+    itself, so we add one explicit white override for the compact-report
+    title block.
+    """
+    if "signal-hold" not in html:
+        return html
+
+    pattern = re.compile(r"(\.header\s*h1\s*\{[^}]*\})", re.IGNORECASE | re.DOTALL)
+    return pattern.sub(r"\1\n        .header h1 { color: #ffffff !important; }", html, count=1)
+
+
 # ---------------------------------------------------------------------------
 # HTML validation
 # ---------------------------------------------------------------------------
@@ -357,6 +372,7 @@ def generate_compact_html_report(
     content = getattr(response, "content", str(response))
 
     html = strip_markdown_code_fence(content)
+    html = _strengthen_compact_header_title_color(html)
     return html
 
 

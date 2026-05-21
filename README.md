@@ -39,6 +39,14 @@
 
 ## 版本记录
 
+### V1.0.7
+- 修复 History 页面 LLM 生成报告标题区文字不可见问题（深色背景 + 黑色文字）
+- 隐藏登录页面密码框的 "Press Enter to submit form" 提示
+- 修复 history 加载时 task JSON 缺失导致的 "No such file or directory" 错误
+- 修复 runner 用户隔离 3 处缺陷（_run 参数传递、registry 单任务 fallback、auth_store import re）
+- UI 对齐：登录/强制改密/修改密码三页表单位置统一居中
+- 增加复制保护，防止报告页 Ctrl+C 触发 Streamlit "Clear caches" 弹窗
+
 ### V1.0.6
 - 多用户体系：登录鉴权、角色分流（admin / user）
 - 用户级任务隔离：历史分析、任务继续/删除均按用户隔离
@@ -285,6 +293,8 @@ tradingagents --help     # 查看所有选项
 ## Web UI
 
 内置 Streamlit 可视化界面，支持在侧边栏选择 LLM 供应商和模型，输入股票代码即可一键分析，适合不写代码的用户。
+
+> **默认账号**：首次启动后系统自动创建管理员账号 `admin`，初始密码 `Admin@123!`，首次登录强制修改密码。
 
 ### 启动
 
