@@ -292,9 +292,6 @@ def _strengthen_compact_header_title_color(html: str) -> str:
     itself, so we add one explicit white override for the compact-report
     title block.
     """
-    if "signal-hold" not in html:
-        return html
-
     pattern = re.compile(r"(\.header\s*h1\s*\{[^}]*\})", re.IGNORECASE | re.DOTALL)
     return pattern.sub(r"\1\n        .header h1 { color: #ffffff !important; }", html, count=1)
 

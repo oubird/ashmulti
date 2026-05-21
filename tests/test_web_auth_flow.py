@@ -22,7 +22,7 @@ from web.auth_store import (
 
 
 class TestAuthStore(unittest.TestCase):
-    def test_default_users_created(self) -> None:
+    def test_default_admin_created(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
             with patch("pathlib.Path.home", return_value=home):
@@ -30,8 +30,7 @@ class TestAuthStore(unittest.TestCase):
                 ensure_default_users()
                 users = list_users()
                 usernames = {u["username"] for u in users}
-                self.assertIn("admin", usernames)
-                self.assertIn("xuliang", usernames)
+                self.assertEqual(usernames, {"admin"})
 
     def test_verify_password_correct(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -115,9 +114,10 @@ class TestAuthStore(unittest.TestCase):
             with patch("pathlib.Path.home", return_value=home):
                 init_auth_db()
                 ensure_default_users()
-                xu = verify_password("xuliang", "Admin@123!")
-                admin_reset_password(xu["id"], "Reset123")
-                user = verify_password("xuliang", "Reset123")
+                admin = verify_password("admin", "Admin@123!")
+                tester = create_user("tester", "password123", "user", admin["id"])
+                admin_reset_password(tester["id"], "Reset123")
+                user = verify_password("tester", "Reset123")
                 self.assertIsNotNone(user)
                 self.assertTrue(user["must_change_password"])
 
@@ -127,9 +127,10 @@ class TestAuthStore(unittest.TestCase):
             with patch("pathlib.Path.home", return_value=home):
                 init_auth_db()
                 ensure_default_users()
-                xu = verify_password("xuliang", "Admin@123!")
-                update_user(xu["id"], enabled=0)
-                self.assertIsNone(verify_password("xuliang", "Admin@123!"))
+                admin = verify_password("admin", "Admin@123!")
+                tester = create_user("tester", "password123", "user", admin["id"])
+                update_user(tester["id"], enabled=0)
+                self.assertIsNone(verify_password("tester", "password123"))
 
 
 if __name__ == "__main__":

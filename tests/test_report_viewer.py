@@ -4,6 +4,9 @@ from typing import Any
 
 import web.components.report_viewer as report_viewer
 
+from tradingagents.reporting.compact_html_report import (
+    _strengthen_compact_header_title_color,
+)
 from web.components.report_viewer import _clean_html_for_embed
 from web.components.report_viewer import _copy_guard_html
 from web.components.report_viewer import _fix_dark_title_text_color
@@ -158,3 +161,44 @@ def test_fix_dark_title_text_color_with_hsl_dark_background() -> None:
     html = '<div style="background: hsl(220, 40%, 15%); padding: 20px;"><h1>贵州茅台</h1></div>'
     fixed = _fix_dark_title_text_color(html)
     assert 'color: #ffffff !important;' in fixed
+
+
+def test_strengthen_header_title_color_works_for_all_signals() -> None:
+    """_strengthen_compact_header_title_color must fix h1 white for Buy, Sell, and Hold."""
+    base_html = """<!DOCTYPE html>
+    <html>
+      <head>
+        <style>
+          .header {{ background: #1a1a2e; color: #fff; }}
+          .header h1 {{ font-size: 28px; margin-bottom: 10px; }}
+          .signal-{signal} {{ display: inline-block; }}
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>贵州茅台</h1>
+          <div class="signal-{signal}">{label}</div>
+        </div>
+      </body>
+    </html>
+    """
+
+    for signal, label in (("buy", "买入"), ("sell", "卖出"), ("hold", "持有")):
+        html = base_html.format(signal=signal, label=label)
+        fixed = _strengthen_compact_header_title_color(html)
+        assert '.header h1 { color: #ffffff !important; }' in fixed, (
+            f"failed for signal={signal}"
+        )
+
+
+def test_clean_html_for_embed_injects_h1_white_fallback() -> None:
+    """_clean_html_for_embed must inject .report-embed h1 white fallback."""
+    html = """<!DOCTYPE html>
+    <html>
+      <head><style>.header {{ background: #1a1a2e; }}</style></head>
+      <body><div class="header"><h1>宁德时代</h1></div></body>
+    </html>
+    """
+
+    rendered = _clean_html_for_embed(html)
+    assert ".report-embed h1 { color: #ffffff !important; }" in rendered

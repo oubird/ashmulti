@@ -21,7 +21,6 @@ logger = logging.getLogger(__name__)
 _DB_LOCK = threading.Lock()
 
 _DEFAULT_ADMIN = "admin"
-_DEFAULT_USER = "xuliang"
 _INITIAL_PASSWORD = "Admin@123!"
 
 
@@ -110,25 +109,24 @@ def init_auth_db() -> None:
 # ---------------------------------------------------------------------------
 
 def ensure_default_users() -> None:
-    """Ensure admin and xuliang exist with initial password."""
+    """Ensure the default admin exists with initial password."""
     with _DB_LOCK:
         conn = _get_connection()
         try:
-            for username, role in ((_DEFAULT_ADMIN, "admin"), (_DEFAULT_USER, "user")):
-                row = conn.execute(
-                    "SELECT id FROM users WHERE username = ?", (username,)
-                ).fetchone()
-                if row is None:
-                    pwd_hash, salt = _hash_password(_INITIAL_PASSWORD)
-                    conn.execute(
-                        """
-                        INSERT INTO users
-                        (username, password_hash, salt, role, enabled, must_change_password, created_at)
-                        VALUES (?, ?, ?, ?, 1, 1, ?)
-                        """,
-                        (username, pwd_hash, salt, role, _now_iso()),
-                    )
-                    logger.info("Created default %s user: %s", role, username)
+            row = conn.execute(
+                "SELECT id FROM users WHERE username = ?", (_DEFAULT_ADMIN,)
+            ).fetchone()
+            if row is None:
+                pwd_hash, salt = _hash_password(_INITIAL_PASSWORD)
+                conn.execute(
+                    """
+                    INSERT INTO users
+                    (username, password_hash, salt, role, enabled, must_change_password, created_at)
+                    VALUES (?, ?, ?, ?, 1, 1, ?)
+                    """,
+                    (_DEFAULT_ADMIN, pwd_hash, salt, "admin", _now_iso()),
+                )
+                logger.info("Created default admin user: %s", _DEFAULT_ADMIN)
             conn.commit()
         finally:
             conn.close()
@@ -427,7 +425,7 @@ def _set_migration_version(version: int) -> None:
 
 
 def run_legacy_migration() -> dict[str, Any]:
-    """One-time migration: assign all existing tasks to user 'xuliang'.
+    """One-time migration: assign all existing tasks to the admin user.
 
     Returns {"migrated": int, "skipped": int}
     """
@@ -438,19 +436,19 @@ def run_legacy_migration() -> dict[str, Any]:
     if current_version >= 1:
         return {"migrated": 0, "skipped": 0, "reason": "already_migrated"}
 
-    # Resolve xuliang user id
+    # Resolve admin user id
     with _DB_LOCK:
         conn = _get_connection()
         try:
             row = conn.execute(
-                "SELECT id FROM users WHERE username = ?", (_DEFAULT_USER,)
+                "SELECT id FROM users WHERE username = ?", (_DEFAULT_ADMIN,)
             ).fetchone()
             owner_id = row["id"] if row else None
         finally:
             conn.close()
 
     if owner_id is None:
-        return {"migrated": 0, "skipped": 0, "reason": "xuliang_not_found"}
+        return {"migrated": 0, "skipped": 0, "reason": "admin_not_found"}
 
     migrated = 0
     skipped = 0

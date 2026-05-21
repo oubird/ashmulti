@@ -53,7 +53,7 @@ from web.auth_store import (  # noqa: E402
 
 # ── Page config ──────────────────────────────────────────────────────────────
 
-_VERSION = "V1.0.7"
+_VERSION = "V1.0.8"
 
 st.set_page_config(
     page_title="A股多专家投研系统",
@@ -234,6 +234,8 @@ def _render_user_menu() -> None:
         if st.button("🚪 退出登录", key="menu_logout", use_container_width=True):
             st.session_state.pop("auth_user", None)
             st.session_state.pop("tracker", None)
+            st.session_state.pop("viewing_history", None)
+            st.session_state.pop("viewing_task", None)
             st.session_state["current_page"] = "login"
             st.rerun()
 
@@ -506,6 +508,9 @@ def _render_login() -> None:
                     st.error("用户名或密码错误")
                 else:
                     st.session_state["auth_user"] = user
+                    st.session_state.pop("viewing_history", None)
+                    st.session_state.pop("viewing_task", None)
+                    st.session_state.pop("tracker", None)
                     if user.get("must_change_password"):
                         st.session_state["current_page"] = "force_change_password"
                     elif user.get("role") == "admin":

@@ -214,7 +214,8 @@ def _clean_html_for_embed(html: str) -> str:
     html = re.sub(r"</?body[^>]*>", "", html, flags=re.IGNORECASE)
     html = _fix_dark_title_text_color(html)
     html = _strengthen_compact_header_title_color(html)
-    return f'<div class="report-embed">{html.strip()}</div>{_report_table_css()}'
+    fallback = '<style>.report-embed h1 { color: #ffffff !important; }</style>'
+    return f'<div class="report-embed">{html.strip()}</div>{fallback}{_report_table_css()}'
 
 
 _ANALYST_SECTIONS = [
