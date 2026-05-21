@@ -28,13 +28,7 @@ def render_sidebar() -> None:
     st.markdown(
         """
         <div style="text-align:center; margin-bottom:1.5rem;">
-            <span style="font-size:2rem; font-weight:800; color:#ff5a1f;">Trading</span><span style="font-size:2rem; font-weight:800; color:#1f2937;">Agents</span><span style="font-size:2rem; font-weight:800; color:#1f2937;">-</span><span style="font-size:2rem; font-weight:800; color:#ff5a1f;">Astock</span>
-            <div style="font-size:0.85rem; color:#6b7280; margin-top:0.2rem;">
-                A股多Agent投研系统
-            </div>
-            <div style="font-size:0.7rem; color:#9ca3af; margin-top:0.3rem;">
-                by <a href="https://github.com/simonlin1212" style="color:#ff5a1f; text-decoration:none;">simonlin1212</a>
-            </div>
+            <span style="font-size:1.6rem; font-weight:800; color:#1f2937;">A股多专家投研系统</span>
         </div>
         """,
         unsafe_allow_html=True,
