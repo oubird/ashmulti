@@ -11,6 +11,7 @@ from typing import Any
 import streamlit as st
 
 from tradingagents.reporting.compact_html_report import get_stock_name, _safe_filename, _report_dir
+from tradingagents.reporting.risk_html_report import _resolve_risk_html_report
 
 
 def _strip_think(text: str) -> str:
@@ -126,10 +127,10 @@ def render_report(
         )
 
     # ── Raw multi-agent reports (unchanged) ────────────────────────────────
-    _render_raw_markdown(final_state)
+    _render_raw_markdown(final_state, ticker, trade_date)
 
 
-def _render_raw_markdown(final_state: dict[str, Any]) -> None:
+def _render_raw_markdown(final_state: dict[str, Any], ticker: str, trade_date: str) -> None:
     """Render the raw multi-agent markdown report sections."""
     inv_plan = final_state.get("investment_plan", "")
     if inv_plan:
@@ -162,18 +163,23 @@ def _render_raw_markdown(final_state: dict[str, Any]) -> None:
         with st.expander("💹 交易员决策", expanded=False):
             st.markdown(_strip_think(str(trader_decision)))
 
+    # ── Risk assessment: prefer translated Chinese HTML if available ────────
     risk = final_state.get("risk_debate_state")
     if risk and isinstance(risk, dict):
         st.markdown("### 🛡️ 风控评估")
-        tab_agg, tab_con, tab_neu, tab_rj = st.tabs(["激进", "保守", "中性", "风控决策"])
-        with tab_agg:
-            st.markdown(_strip_think(risk.get("aggressive_history", "") or "无数据"))
-        with tab_con:
-            st.markdown(_strip_think(risk.get("conservative_history", "") or "无数据"))
-        with tab_neu:
-            st.markdown(_strip_think(risk.get("neutral_history", "") or "无数据"))
-        with tab_rj:
-            st.markdown(_strip_think(risk.get("judge_decision", "") or "无数据"))
+        risk_html_exists, risk_html_bytes = _resolve_risk_html_report(ticker, trade_date)
+        if risk_html_exists:
+            st.components.v1.html(risk_html_bytes.decode("utf-8"), height=700, scrolling=True)
+        else:
+            tab_agg, tab_con, tab_neu, tab_rj = st.tabs(["激进", "保守", "中性", "风控决策"])
+            with tab_agg:
+                st.markdown(_strip_think(risk.get("aggressive_history", "") or "无数据"))
+            with tab_con:
+                st.markdown(_strip_think(risk.get("conservative_history", "") or "无数据"))
+            with tab_neu:
+                st.markdown(_strip_think(risk.get("neutral_history", "") or "无数据"))
+            with tab_rj:
+                st.markdown(_strip_think(risk.get("judge_decision", "") or "无数据"))
 
     dqs = final_state.get("data_quality_summary", "")
     if dqs:

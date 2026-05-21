@@ -220,6 +220,25 @@ def _run(
 
         logging.getLogger(__name__).warning("Compact HTML report generation failed: %s", exc)
 
+    # Generate risk assessment Chinese HTML report (post-processing, failures are non-fatal)
+    try:
+        from tradingagents.reporting.risk_html_report import (
+            generate_risk_html_report,
+            get_stock_name,
+            save_risk_html_report,
+        )
+
+        risk_html = generate_risk_html_report(
+            llm=graph.quick_thinking_llm,
+            risk_debate_state=last_chunk.get("risk_debate_state", {}),
+        )
+        stock_name = get_stock_name(ticker)
+        save_risk_html_report(risk_html, ticker, stock_name, trade_date)
+    except Exception as exc:
+        import logging
+
+        logging.getLogger(__name__).warning("Risk HTML report generation failed: %s", exc)
+
     tracker.mark_complete(last_chunk, signal)
 
 
