@@ -25,6 +25,7 @@ from web.task_store import (
     create_task_record,
     delete_task_artifacts,
     full_log_path,
+    load_legacy_cli_final_state,
     load_task_record_by_path,
     merge_task_record,
     save_task_record,
@@ -242,18 +243,29 @@ def _load_final_state_for_repair(
     runtime_config: dict[str, Any],
 ) -> tuple[dict[str, Any], Path]:
     """Load the saved full-state log for report repair."""
+    if existing_record and existing_record.get("legacy_cli"):
+        legacy_final_state = load_legacy_cli_final_state(ticker, trade_date)
+        if legacy_final_state is not None:
+            legacy_log_path = Path.home() / ".tradingagents" / "logs" / ticker / trade_date / "message_tool.log"
+            return legacy_final_state, legacy_log_path
+
     log_path = Path(
         (existing_record or {}).get("final_state_path")
         or full_log_path(ticker, trade_date, runtime_config)
     )
-    if not log_path.exists():
-        raise FileNotFoundError(f"找不到可用于补报告的日志文件: {log_path}")
+    if log_path.exists() and log_path.suffix.lower() == ".json":
+        import json
 
-    import json
+        with log_path.open(encoding="utf-8") as f:
+            final_state = json.load(f)
+        return final_state, log_path
 
-    with log_path.open(encoding="utf-8") as f:
-        final_state = json.load(f)
-    return final_state, log_path
+    legacy_final_state = load_legacy_cli_final_state(ticker, trade_date)
+    if legacy_final_state is not None:
+        legacy_log_path = Path.home() / ".tradingagents" / "logs" / ticker / trade_date / "message_tool.log"
+        return legacy_final_state, legacy_log_path
+
+    raise FileNotFoundError(f"找不到可用于补报告的日志文件: {log_path}")
 
 
 def _generate_reports(
@@ -261,6 +273,7 @@ def _generate_reports(
     final_state: dict[str, Any],
     ticker: str,
     trade_date: str,
+    stop_event: threading.Event | None = None,
 ) -> tuple[str, str, str | None]:
     """Generate the compact and risk HTML reports."""
     stock_name = get_stock_name(ticker)
@@ -269,6 +282,8 @@ def _generate_reports(
     postprocess_error: str | None = None
 
     try:
+        if stop_event and stop_event.is_set():
+            raise InterruptedError("用户已取消")
         html = generate_compact_html_report(
             llm=graph.quick_thinking_llm,
             final_state=final_state,
@@ -276,19 +291,29 @@ def _generate_reports(
             trade_date=trade_date,
         )
         compact_path = str(save_compact_html_report(html, ticker, stock_name, trade_date))
+        if stop_event and stop_event.is_set():
+            raise InterruptedError("用户已取消")
     except Exception as exc:
+        if isinstance(exc, InterruptedError):
+            raise
         postprocess_error = str(exc)
         import logging
 
         logging.getLogger(__name__).warning("Compact HTML report generation failed: %s", exc)
 
     try:
+        if stop_event and stop_event.is_set():
+            raise InterruptedError("用户已取消")
         risk_html = generate_risk_html_report(
             llm=graph.quick_thinking_llm,
             risk_debate_state=final_state.get("risk_debate_state", {}),
         )
         risk_path = str(save_risk_html_report(risk_html, ticker, stock_name, trade_date))
+        if stop_event and stop_event.is_set():
+            raise InterruptedError("用户已取消")
     except Exception as exc:
+        if isinstance(exc, InterruptedError):
+            raise
         postprocess_error = postprocess_error or str(exc)
         if postprocess_error and str(exc) not in postprocess_error:
             postprocess_error = f"{postprocess_error}; {exc}"
@@ -412,12 +437,15 @@ def _run(
                 task_record_state,
                 runtime_config,
             )
+            if _STOP_EVENT.is_set():
+                raise InterruptedError("用户已取消")
             signal = graph.process_signal(final_state.get("final_trade_decision", ""))
             compact_path, risk_path, postprocess_error = _generate_reports(
                 graph,
                 final_state,
                 ticker,
                 trade_date,
+                stop_event=_STOP_EVENT,
             )
             report_complete = bool(compact_path and risk_path)
             if task_record_state is not None:
@@ -564,6 +592,7 @@ def _run(
             final_state,
             ticker,
             trade_date,
+            stop_event=_STOP_EVENT,
         )
         report_complete = bool(compact_path and risk_path)
 

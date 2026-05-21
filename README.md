@@ -32,12 +32,24 @@
 - [项目结构](#项目结构)
 - [致谢](#致谢)
 - [版本记录](#版本记录)
-- [Donate](#donate)
+- [项目来源](#项目来源)
 - [许可证](#许可证)
 
 ---
 
 ## 版本记录
+
+### V1.0.5
+- README 重构：删除 Web UI 截图、删除 Donate 章节并替换为「项目来源」
+- 发版流程提取为独立 skill：shmulti-release，不再内置在 AGENTS.md 中
+- Web 任务生命周期：历史分析支持中断任务展示、继续恢复与删除清理
+- Legacy CLI 旧日志兜底：旧 CLI 产物自动恢复为历史记录
+- 报告页面布局：正文内容居中，宽度与 welcome 卡片对齐
+
+### V1.0.4
+- 历史分析增加 legacy CLI 旧日志兜底，message_tool.log + 阶段 md 也能恢复成历史行
+- 继续 支持对旧 CLI 残留任务走补报告 / 补产物流程
+- 删除按钮同时清理 Web 任务清单与 legacy CLI 旧产物
 
 ### V1.0.3
 - 历史分析支持中断任务展示、继续恢复与删除清理
@@ -287,12 +299,6 @@ streamlit run web/app.py
 - **PDF 导出**：一键下载完整 PDF 分析报告
 - **历史记录**：自动保存并展示所有历史分析
 
-### 截图
-
-<p align="center">
-  <img src="assets/web-ui-welcome.png" width="80%" alt="Web UI 欢迎页"/>
-</p>
-
 ---
 
 ## 配置说明
@@ -377,19 +383,9 @@ TradingAgents-Astock/
 
 本项目是 TauricResearch/TradingAgents 的 fork，继承 Apache 2.0 许可证。详见 [NOTICE](./NOTICE)。
 
-## Donate
+## 项目来源
 
-如果这个工具帮到了你的投研工作流，欢迎请作者喝杯咖啡 ☕
-
-<p align="center">
-  <img src="./assets/wechat-sponsor.jpg" width="240" alt="微信赞赏码">
-</p>
-<p align="center">
-  <a href="https://ifdian.net/a/simonlin">爱发电</a> ·
-  <a href="https://buymeacoffee.com/simonlin1212">Buy Me a Coffee</a>
-</p>
-
-> 想要什么功能？欢迎开 [Issue](https://github.com/simonlin1212/tradingagents-astock/issues) 提需求，赞助者的 Issue 优先处理。
+本项目 fork 自 [simonlin1212/TradingAgents-astock](https://github.com/simonlin1212/TradingAgents-astock)，在其基础上进行了深度特化与功能扩展。
 
 ---
 
@@ -401,3 +397,4 @@ TradingAgents-Astock/
 > - 投资决策请咨询持有中国证监会颁发资质的专业机构
 > - 作者不对使用本工具产生的任何投资损失承担责任
 > - 股市有风险，投资需谨慎
+

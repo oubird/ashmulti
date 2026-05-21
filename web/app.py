@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+import re
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
@@ -29,13 +30,15 @@ from web.task_store import (  # noqa: E402
     apply_task_snapshot,
     build_resume_config,
     delete_task_artifacts,
+    legacy_cli_date_dir,
+    load_legacy_cli_final_state,
     load_task_record_by_path,
     save_task_record,
 )
 
 # ── Page config ──────────────────────────────────────────────────────────────
 
-_VERSION = "V1.0.3"
+_VERSION = "V1.0.5"
 
 st.set_page_config(
     page_title="A股多专家投研系统",
@@ -319,13 +322,110 @@ def _status_color(label: str) -> str:
     }.get(label, "#6b7280")
 
 
+_HISTORY_HTML_RE = re.compile(
+    r"^(?P<ticker>\d{6})_.+_(?P<trade_date>\d{4}-\d{2}-\d{2})(?:_risk)?$"
+)
+
+
+def _infer_history_identity(source_path: Path) -> tuple[str, str] | None:
+    """Infer ticker and trade date from a history artifact path."""
+    if source_path.name.startswith("full_states_log_") and source_path.suffix.lower() == ".json":
+        return source_path.parent.parent.name, source_path.stem.replace("full_states_log_", "")
+
+    if source_path.suffix.lower() == ".html":
+        match = _HISTORY_HTML_RE.match(source_path.stem)
+        if match:
+            return match.group("ticker"), match.group("trade_date")
+
+    if source_path.name == "complete_report.md" and source_path.parent.name == "reports":
+        try:
+            trade_date = source_path.parent.parent.name
+            ticker = source_path.parent.parent.parent.name
+        except Exception:
+            return None
+        if re.fullmatch(r"\d{6}", ticker) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", trade_date):
+            return ticker, trade_date
+
+    if source_path.name == "reports" and source_path.is_dir():
+        try:
+            trade_date = source_path.parent.name
+            ticker = source_path.parent.parent.name
+        except Exception:
+            return None
+        if re.fullmatch(r"\d{6}", ticker) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", trade_date):
+            return ticker, trade_date
+
+    return None
+
+
+def _load_history_report_state(viewing_history: Any) -> tuple[dict[str, Any], str, str, str]:
+    """Load a report-view target into (state, ticker, trade_date, signal)."""
+    candidates: list[Path] = []
+
+    if isinstance(viewing_history, dict):
+        ticker = str(viewing_history.get("ticker") or "")
+        trade_date = str(viewing_history.get("date") or viewing_history.get("trade_date") or "")
+        if ticker and trade_date and viewing_history.get("legacy_cli"):
+            state = load_legacy_cli_final_state(ticker, trade_date)
+            if state:
+                return state, ticker, trade_date, extract_signal(state)
+
+        for key in ("task_path", "log_path", "path", "view_path"):
+            value = viewing_history.get(key)
+            if value:
+                candidates.append(Path(str(value)))
+    else:
+        candidates.append(Path(str(viewing_history)))
+
+    for source_path in candidates:
+        if not source_path:
+            continue
+
+        if source_path.suffix.lower() == ".json":
+            if source_path.name.startswith("full_states_log_"):
+                state = load_analysis(str(source_path))
+                ticker = source_path.parent.parent.name
+                trade_date = source_path.stem.replace("full_states_log_", "")
+                return state, ticker, trade_date, extract_signal(state)
+
+            record = load_task_record_by_path(source_path)
+            if record:
+                ticker = str(record.get("ticker") or source_path.parent.name)
+                trade_date = str(record.get("trade_date") or source_path.stem)
+                if record.get("legacy_cli"):
+                    state = load_legacy_cli_final_state(ticker, trade_date)
+                    if state:
+                        return state, ticker, trade_date, extract_signal(state)
+
+                final_state_path = record.get("final_state_path")
+                if final_state_path:
+                    final_path = Path(str(final_state_path))
+                    if final_path.exists() and final_path.suffix.lower() == ".json":
+                        state = load_analysis(str(final_path))
+                        return state, ticker, trade_date, extract_signal(state)
+
+            state = load_analysis(str(source_path))
+            ticker = source_path.parent.parent.name if source_path.name.startswith("full_states_log_") else source_path.parent.name
+            trade_date = source_path.stem.replace("full_states_log_", "")
+            return state, ticker, trade_date, extract_signal(state)
+
+        identity = _infer_history_identity(source_path)
+        if identity:
+            ticker, trade_date = identity
+            state = load_legacy_cli_final_state(ticker, trade_date)
+            if state:
+                return state, ticker, trade_date, extract_signal(state)
+
+    raise FileNotFoundError(f"无法加载历史报告: {viewing_history}")
+
+
 # ── Home page ────────────────────────────────────────────────────────────────
 
 def _render_home() -> None:
     """Render the home page: welcome, progress, report, or error."""
     tracker: ProgressTracker | None = st.session_state.get("tracker")
     viewing_task: dict[str, Any] | None = st.session_state.get("viewing_task")
-    viewing_history: str | None = st.session_state.get("viewing_history")
+    viewing_history: Any = st.session_state.get("viewing_history")
 
     # State 0.5: Viewing an interrupted or resumable task
     if viewing_task:
@@ -338,10 +438,7 @@ def _render_home() -> None:
     # State 1: Viewing a historical analysis
     if viewing_history:
         try:
-            state = load_analysis(viewing_history)
-            signal = extract_signal(state)
-            ticker = Path(viewing_history).parent.parent.name
-            trade_date = Path(viewing_history).stem.replace("full_states_log_", "")
+            state, ticker, trade_date, signal = _load_history_report_state(viewing_history)
             render_report(state, ticker, trade_date, signal)
         except Exception as exc:
             st.error(f"加载失败: {exc}")
@@ -355,6 +452,7 @@ def _render_home() -> None:
             request_stop()
             st.session_state.pop("tracker", None)
             st.session_state.pop("start_analysis", None)
+            st.session_state["suppress_tracker_reconnect"] = True
             st.rerun()
 
         import time
@@ -455,7 +553,7 @@ def _render_history_page() -> None:
             with a1:
                 if st.button("查看", key=f"view_{ticker}_{date_str}", type="secondary", use_container_width=True):
                     if entry.get("view_mode") == "report":
-                        st.session_state["viewing_history"] = entry["path"]
+                        st.session_state["viewing_history"] = dict(entry)
                         st.session_state.pop("viewing_task", None)
                     else:
                         st.session_state["viewing_task"] = entry
@@ -565,13 +663,16 @@ def _launch_analysis_request(request: dict[str, Any]) -> None:
         ticker=ticker,
         trade_date=trade_date,
     )
+    tracker.run_mode = "repair" if repair_only else "analysis"
     if task_record:
         apply_task_snapshot(tracker, task_record)
         tracker.error = None
         tracker.postprocess_error = None
+        tracker.run_mode = "repair" if repair_only else "analysis"
 
     st.session_state["tracker"] = tracker
     st.session_state["current_page"] = "home"
+    st.session_state.pop("suppress_tracker_reconnect", None)
     st.session_state.pop("viewing_task", None)
     st.session_state.pop("viewing_history", None)
     st.session_state.pop("history_cache", None)
@@ -600,6 +701,23 @@ def _queue_history_continue(entry: dict[str, Any]) -> None:
     task_path = entry.get("task_path") or ""
     if task_path:
         task_record = load_task_record_by_path(task_path)
+    elif entry.get("legacy_cli"):
+        legacy_dir = legacy_cli_date_dir(entry["ticker"], entry["date"])
+        if legacy_dir.exists():
+            task_record = {
+                "ticker": entry["ticker"],
+                "trade_date": entry["date"],
+                "task_path": "",
+                "config": _build_config(),
+                "selected_analysts": _SELECTED_ANALYSTS,
+                "stock_name": entry.get("stock_name") or entry.get("name") or "",
+                "analysis_complete": True,
+                "report_complete": bool(entry.get("report_complete")),
+                "status": "recoverable" if not entry.get("report_complete") else "completed",
+                "final_state_path": str(legacy_dir / "reports" / "complete_report.md"),
+                "legacy_cli": True,
+                "source": "legacy_cli",
+            }
 
     if task_record and isinstance(task_record.get("config"), dict):
         config = build_resume_config(task_record)
@@ -648,6 +766,7 @@ def _delete_history_entry(entry: dict[str, Any]) -> None:
         save_task_record(record)
         request_stop()
         st.session_state.pop("tracker", None)
+        st.session_state["suppress_tracker_reconnect"] = True
     else:
         record = dict(task_record or entry)
         record.setdefault("ticker", entry["ticker"])
@@ -673,9 +792,10 @@ if start_req:
 # ── Reconnect to an active background run after page refresh ─────────────────
 
 if "tracker" not in st.session_state:
-    _active = get_active_tracker()
-    if _active and (_active.is_running or _active.is_complete or _active.error):
-        st.session_state["tracker"] = _active
+    if not st.session_state.get("suppress_tracker_reconnect"):
+        _active = get_active_tracker()
+        if _active and (_active.is_running or _active.is_complete or _active.error):
+            st.session_state["tracker"] = _active
 
 
 # ── Initialize page routing ──────────────────────────────────────────────────

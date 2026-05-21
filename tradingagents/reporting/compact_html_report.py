@@ -249,6 +249,16 @@ def build_compact_report_source(
         lines.append(str(dqs)[:2000])
         lines.append("")
 
+    legacy_report = final_state.get("complete_report_md")
+    if legacy_report:
+        lines.append("=" * 60)
+        lines.append("【历史完整报告】")
+        text = str(legacy_report)
+        if len(text) > 5000:
+            text = text[:5000] + "\n... [内容过长，已截断]"
+        lines.append(text)
+        lines.append("")
+
     return "\n".join(lines)
 
 

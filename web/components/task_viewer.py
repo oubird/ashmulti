@@ -77,6 +77,8 @@ def render_task_detail(entry: dict[str, Any]) -> None:
 
     if data.get("status_label") in {"中断", "可恢复"}:
         st.info("这条任务还没有完整结束，可以回到历史列表点击“继续”来接着跑。")
+    elif data.get("legacy_cli"):
+        st.info("这是一条从历史运行日志恢复出来的旧任务，没有 Web 任务清单和 checkpoint；点击“继续”会走补报告 / 补产物流程。")
 
     stage_reports = data.get("stage_reports") or {}
     if isinstance(stage_reports, dict) and stage_reports:
@@ -84,6 +86,20 @@ def render_task_detail(entry: dict[str, Any]) -> None:
         for stage_name, report in stage_reports.items():
             with st.expander(str(stage_name), expanded=False):
                 st.markdown(str(report))
+
+    if data.get("legacy_cli"):
+        legacy_dir = Path(data.get("path") or data.get("view_path") or "")
+        if legacy_dir.is_dir():
+            st.markdown("#### 旧任务产物")
+            report_files = sorted(p for p in legacy_dir.glob("*.md"))
+            for report_file in report_files:
+                if report_file.name == "complete_report.md":
+                    continue
+                with st.expander(report_file.name, expanded=False):
+                    try:
+                        st.markdown(report_file.read_text(encoding="utf-8"))
+                    except Exception as exc:
+                        st.warning(f"读取失败: {exc}")
 
     if data.get("final_trade_decision") or data.get("investment_plan") or data.get("trader_investment_plan"):
         st.markdown("#### 当前结果摘要")

@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>星网锐捷（002396）投研精简报告</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #f5f5f5;
+            color: #333;
+            line-height: 1.6;
+            padding: 20px;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background-color: #fff;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        /* 标题区 */
+        .header {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #fff;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+        .header .subtitle {
+            font-size: 16px;
+            color: #ccc;
+            margin-bottom: 20px;
+        }
+        .header .info-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            max-width: 600px;
+            margin: 20px auto 0;
+        }
+        .header .info-item {
+            text-align: left;
+        }
+        .header .info-label {
+            font-size: 12px;
+            color: #888;
+        }
+        .header .info-value {
+            font-size: 14px;
+        }
+        
+        /* 信号标签 */
+        .signal-label {
+            display: inline-block;
+            padding: 10px 30px;
+            border-radius: 25px;
+            font-size: 20px;
+            font-weight: bold;
+            margin: 15px 0;
+        }
+        .signal-sell {
+            background-color: #e74c3c;
+            color: #fff;
+        }
+        
+        /* 摘要区 */
+        .section {
+            padding: 25px 30px;
+            border-bottom: 1px solid #eee;
+        }
+        .section h2 {
+            font-size: 18px;
+            color: #1a1a2e;
+            margin-bottom: 15px;
+            padding-left: 10px;
+            border-left: 4px solid #e74c3c;
+        }
+        .summary-box {
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+        }
+        .summary-item {
+            display: flex;
+            margin-bottom: 10px;
+        }
+        .summary-item:last-child {
+            margin-bottom: 0;
+        }
+        .summary-label {
+            font-weight: bold;
+            min-width: 100px;
+            color: #555;
+        }
+        
+        /* 交易计划表 */
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        .data-table th, .data-table td {
+            padding: 12px 15px;
+            text-align: left;
+            border: 1px solid #ddd;
+        }
+        .data-table th {
+            background-color: #f0f0f0;
+            font-weight: bold;
+            color: #333;
+        }
+        .data-table tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        .data-table tr:hover {
+            background-color: #f5f5f5;
+        }
+        
+        /* 技术面 */
+        .tech-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-top: 15px;
+        }
+        .tech-item {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .tech-item .label {
+            font-size: 12px;
+            color: #777;
+            margin-bottom: 5px;
+        }
+        .tech-item .value {
+            font-size: 16px;
+            font-weight: bold;
+            color: #333;
+        }
+        .tech-item .signal {
+            font-size: 12px;
+            margin-top: 5px;
+        }
+        .signal-bear {
+            color: #e74c3c;
+        }
+        .signal-bull {
+            color: #27ae60;
+        }
+        .signal-neutral {
+            color: #f39c12;
+        }
+        
+        /* 消息面 */
+        .news-item {
+            padding: 12px 0;
+            border-bottom: 1px dashed #eee;
+        }
+        .news-item:last-child {
+            border-bottom: none;
+        }
+        .news-positive {
+            color: #27ae60;
+        }
+        .news-negative {
+            color: #e74c3c;
+        }
+        .news-neutral {
+            color: #777;
+        }
+        
+        /* 多空观点表 */
+        .bull-bear-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        .bull-bear-table th {
+            padding: 15px;
+            text-align: left;
+            color: #fff;
+        }
+        .bull-bear-table td {
+            padding: 15px;
+            vertical-align: top;
+            border: 1px solid #ddd;
+        }
+        .bull-bear-table .bull-header {
+            background-color: #27ae60;
+        }
+        .bull-bear-table .bear-header {
+            background-color: #e74c3c;
+        }
+        .bull-bear-table ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+        .bull-bear-table li {
+            margin-bottom: 8px;
+        }
+        
+        /* 风险提示 */
+        .risk-box {
+            background-color: #fdeaea;
+            border: 2px solid #e74c3c;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 15px;
+        }
+        .risk-box h3 {
+            color: #c0392b;
+            margin-bottom: 10px;
+        }
+        .risk-box ul {
+            padding-left: 20px;
+        }
+        .risk-box li {
+            margin-bottom: 8px;
+            color: #333;
+        }
+        
+        /* 免责声明 */
+        .disclaimer {
+            background-color: #f5f5f5;
+            padding: 20px 30px;
+            font-size: 12px;
+            color: #666;
+            text-align: justify;
+            line-height: 1.8;
+        }
+        
+        /* 跟踪清单 */
+        .checklist {
+            list-style: none;
+            padding: 0;
+        }
+        .checklist li {
+            padding: 10px 0;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            align-items: flex-start;
+        }
+        .checklist li:before {
+            content: "☐";
+            margin-right: 10px;
+            font-size: 16px;
+        }
+        
+        /* 决策解释 */
+        .decision-box {
+            background-color: #f8f9fa;
+            border-left: 4px solid #e74c3c;
+            padding: 15px 20px;
+            margin-top: 15px;
+        }
+        
+        @media (max-width: 600px) {
+            .tech-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .header .info-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 标题区 -->
+        <div class="header">
+            <h1>星网锐捷（002396）</h1>
+            <div class="subtitle">
+                分析日期：2026年5月20日 | 数据截止：2026年5月19日
+            </div>
+            <div class="signal-label signal-sell">低配（Underweight）</div>
+            <p style="margin-top: 15px; font-size: 14px; color: #ccc;">
+                综合裁决评分 2.56/5（低于中立线），建议现有持仓减仓至30%以下，新资金不建做多位。
+            </p>
+        </div>
+
+        <!-- 核心结论摘要 -->
+        <div class="section">
+            <h2>核心结论摘要</h2>
+            <div class="summary-box">
+                <div class="summary-item">
+                    <span class="summary-label">当前建议</span>
+                    <span>低配（Underweight），持仓减仓</span>
+                </div>
+                <div class="summary-item">
+                    <span class="summary-label">仓位建议</span>
+                    <span>现有持仓减仓至30%以下，新资金不建仓</span>
+                </div>
+                <div class="summary-item">
+                    <span class="summary-label">加仓条件</span>
+                    <span>等待Q2中报环比大幅改善、国家电网具体订单公告、三份缺失报告补充完整、华泰上调目标价</span>
+                </div>
+                <div class="summary-item">
+                    <span class="summary-label">止损位</span>
+                    <span>29.50元（跌破30元整数关口坚决离场）</span>
+                </div>
+                <div class="summary-item">
+                    <span class="summary-label">主要风险</span>
+                    <span>Q1政府补助骤降50%、华泰下调盈利预测19%、技术面高位调整压力、政策/游资/解禁三大未知风险</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 关键交易计划表 -->
+        <div class="section">
+            <h2>关键交易计划表</h2>
+            <table class="data-table">
+                <tr>
+                    <th width="35%">交易项目</th>
+                    <th width="65%">具体数值</th>
+                </tr>
+                <tr>
+                    <td>当前价格</td>
+                    <td>32.25元（2026-05-19收盘价）</td>
+                </tr>
+                <tr>
+                    <td>支撑位</td>
+                    <td>短期：30.67元（10日EMA）；中期：28.50-29.00元</td>
+                </tr>
+                <tr>
+                    <td>压力位</td>
+                    <td>32.50元（心理关口）；33.70元（历史高点）</td>
+                </tr>
+                <tr>
+                    <td>止损位</td>
+                    <td>29.50元（跌破30元整数关口离场）</td>
+                </tr>
+                <tr>
+                    <td>目标/止盈区间</td>
+                    <td>33.00-34.00元区间减持；目标价34.82元（华泰预测）</td>
+                </tr>
+                <tr>
+                    <td>加仓条件</td>
+                    <td>①Q2中报环比大幅改善 ②国家电网具体订单公告 ③缺失报告补充完整 ④华泰上调目标价</td>
+                </tr>
+                <tr>
+                    <td>减仓/离场条件</td>
+                    <td>33-34元区间减仓；跌破29.50元清仓</td>
+                </tr>
+                <tr>
+                    <td>建议仓位</td>
+                    <td>现有持仓≤30%；新资金不建做多位</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- 技术面精简 -->
+        <div class="section">
+            <h2>技术面精简</h2>
+            <div class="tech-grid">
+                <div class="tech-item">
+                    <div class="label">MACD</div>
+                    <div class="value">+1.08</div>
+                    <div class="signal signal-bull">零轴上方金叉延续</div>
+                </div>
+                <div class="tech-item">
+                    <div class="label">RSI</div>
+                    <div class="value">67.02</div>
+                    <div class="signal signal-neutral">偏强但未超买</div>
+                </div>
+                <div class="tech-item">
+                    <div class="label">BOLL</div>
+                    <div class="value">乖离10.7%</div>
+                    <div class="signal signal-bear">价格显著高于上轨</div>
+                </div>
+                <div class="tech-item">
+                    <div class="label">10日EMA</div>
+                    <div class="value">30.67元</div>
+                    <div class="signal signal-bull">价格踩均线上方</div>
+                </div>
+                <div class="tech-item">
+                    <div class="label">50日SMA</div>
+                    <div class="value">28.48元</div>
+                    <div class="signal signal-bull">多头排列</div>
+                </div>
+                <div class="tech-item">
+                    <div class="label">ATR</div>
+                    <div class="value">1.617</div>
+                    <div class="signal signal-neutral">波动率扩大42%</div>
+                </div>
+            </div>
+            <div class="decision-box">
+                <strong>技术面结论：</strong>整体呈现"高位整固"特征，MACD多头延续但RSI和BOLL乖离率构成短期调整压力。量能峰值出现在5月12日高点（33.70元）后快速萎缩至48%，需警惕出货信号。均线系统仍保持多头排列，中期趋势未破坏。
+            </div>
+        </div>
+
+        <!-- 消息面/舆情/政策面 -->
+        <div class="section">
+            <h2>消息面与舆情分析</h2>
+            <h3 style="font-size: 14px; color: #27ae60; margin-bottom: 10px;">利好因素</h3>
+            <div class="news-item">
+                <span class="news-positive">■</span> 与中国移动杭研签署战略合作协议，出席具身智能合作伙伴大会
+            </div>
+            <div class="news-item">
+                <span class="news-positive">■</span> 国产化框式OLT入围国家电网2026输变电协议库存（重大业务突破）
+            </div>
+            <div class="news-item">
+                <span class="news-positive">■</span> 易方达科益混合A基金重仓（机构专业认可）
+            </div>
+            <div class="news-item">
+                <span class="news-positive">■</span> 2026中国品牌价值评价再创佳绩
+            </div>
+            
+            <h3 style="font-size: 14px; color: #e74c3c; margin: 15px 0 10px;">利空因素</h3>
+            <div class="news-item">
+                <span class="news-negative">■</span> Q1增收不增利：其他收益同比减少4000万元（-50%），扣非净利润仅904万元
+            </div>
+            <div class="news-item">
+                <span class="news-negative">■</span> 华泰证券下调2026年盈利预测19%，下调目标价4.2%
+            </div>
+            
+            <h3 style="font-size: 14px; color: #777; margin: 15px 0 10px;">中性观察</h3>
+            <div class="news-item">
+                <span class="news-neutral">●</span> 2025年度利润分配及资本公积转增股本方案实施
+            </div>
+            <div class="news-item">
+                <span class="news-neutral">●</span> 出席左海集团产业生态大会（具体合作待观察）
+            </div>
+        </div>
+
+        <!-- 基本面精简 -->
+        <div class="section">
+            <h2>基本面精简</h2>
+            <table class="data-table">
+                <tr>
+                    <th width="40%">指标</th>
+                    <th width="60%">数据</th>
+                </tr>
+                <tr>
+                    <td>PE（TTM）</td>
+                    <td>48.16x（行业中等偏高）</td>
+                </tr>
+                <tr>
+                    <td>PB</td>
+                    <td>2.77x</td>
+                </tr>
+                <tr>
+                    <td>总市值</td>
+                    <td>约194.57亿元</td>
+                </tr>
+                <tr>
+                    <td>2026E 净利润预测</td>
+                    <td>8.87亿元（+116.85%），机构：华泰证券（样本单一）</td>
+                </tr>
+                <tr>
+                    <td>前向PE（2026E）</td>
+                    <td>约27.80x，PEG约0.41</td>
+                </tr>
+                <tr>
+                    <td>历史ROE</td>
+                    <td>2025年6.01%（持续低于7%，盈利能力承压）</td>
+                </tr>
+                <tr>
+                    <td>现金流</td>
+                    <td>2025年每股经营现金流3.57元 > EPS 0.71元（质量较优）</td>
+                </tr>
+                <tr>
+                    <td>资产负债率</td>
+                    <td>报告未明确给出</td>
+                </tr>
+                <tr>
+                    <td>历史业绩</td>
+                    <td>连续6年无法超越2019年高点</td>
+                </tr>
+            </table>
+            <div class="decision-box">
+                <strong>基本面关键矛盾：</strong>Q1政府补助骤降50%（约4000万）与全年117%增长预测存在数学矛盾。若补助全年减少约1亿元，主营业务需弥补该缺口，但Q1主营扣非净利润仅904万元，说明Q1主营盈利能力极其薄弱，非单纯季节性因素。
+            </div>
+        </div>
+
+        <!-- 多空观点压缩 -->
+        <div class="section">
+            <h2>多空观点压缩</h2>
+            <table class="bull-bear-table">
+                <tr>
+                    <th class="bull-header" width="50%">多头核心理由</th>
+                    <th class="bear-header" width="50%">空头核心风险</th>
+                </tr>
+                <tr>
+                    <td>
+                        <ul>
+                            <li>前向PE 27.8x对应117%增速，PEG 0.41估值有吸引力</li>
+                            <li>行业周期性底部整固+AI数据中心新增需求</li>
+                            <li>国家电网入围体现技术实力</li>
+                            <li>技术面高位整固，洗盘后或重启升势</li>
+                        </ul>
+                    </td>
+                    <td>
+                        <ul>
+                            <li>Q1政府补助骤降50%与全年117%预测存在数学矛盾</li>
+                            <li>华泰下调19%盈利预测构成实质性警告</li>
+                            <li>BOLL乖离率10.7%，量能萎缩是出货信号</li>
+                            <li>连续6年无法超越2019年高点，历史业绩无说服力</li>
+                            <li>政策/游资/解禁三大风险无法量化</li>
+                        </ul>
+                    </td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- 最终决策解释 -->
+        <div class="section">
+            <h2>最终决策解释</h2>
+            <div class="decision-box">
+                <p><strong>裁决结果：低配（Underweight）</strong></p>
+                <br>
+                <p>本次辩论中，空方在三个核心问题上取得决定性胜利：</p>
+                <ol style="padding-left: 20px; margin: 10px 0;">
+                    <li>Q1政府补助骤降50%与全年117%增长预测存在数学矛盾——多方未能有效反驳</li>
+                    <li>华泰下调19%目标价和盈利预测是实质性警告——多方"预期差"解读存在方向性错误</li>
+                    <li>三份F级报告缺失的内容恰好涵盖A股最致命风险——"替代验证"无法替代真实数据</li>
+                </ol>
+                <br>
+                <p><strong>为何比部分分析师更保守：</strong></p>
+                <ul style="padding-left: 20px;">
+                    <li>当前价位盈亏比不利做多：向上空间约8%，向下风险约8-13%</li>
+                    <li>技术面虽保持多头但BOLL乖离率偏高，需整固消化</li>
+                    <li>估值预期依赖单一机构（华泰），可靠性不足</li>
+                    <li>基本面验证需等待Q2-Q3中报</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- 风险提示 -->
+        <div class="section">
+            <h2>风险提示</h2>
+            <div class="risk-box">
+                <h3>⚠️ 重要风险警示</h3>
+                <ul>
+                    <li><strong>基本面结构性弱点：</strong>Q1政府补助骤降50%，与全年117%增长预测存在数学矛盾，主营盈利能力存疑</li>
+                    <li><strong>机构预测风险：</strong>华泰下调盈利预测19%，目标价下调4.2%，单一机构预测可靠性不足</li>
+                    <li><strong>技术面调整压力：</strong>BOLL乖离率10.7%，量能萎缩至48%，短期存在回调风险</li>
+                    <li><strong>政策黑天鹅风险：</strong>A股政策风险"事后才显现"，历史案例（教育双减、互联网反垄断）显示技术面完美形态无法防御政策风险</li>
+                    <li><strong>游资撤退风险：</strong>量能峰值出现在5月12日高点（33.70元），需警惕主力出货</li>
+                    <li><strong>解禁减持风险：</strong>流通股占比99.5%，原始股东持股成本极低，任何减持公告都将直接承压</li>
+                    <li><strong>历史业绩警示：</strong>连续6年无法超越2019年高点，趋势反转需强劲基本面验证</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- 后续跟踪清单 -->
+        <div class="section">
+            <h2>后续跟踪清单</h2>
+            <ul class="checklist">
+                <li>Q2中报业绩表现：环比是否大幅改善，验证8.87亿全年预测可行性</li>
+                <li>国家电网具体订单公告：是否带金额证明，合作转化率能否提升</li>
+                <li>游资动向：龙虎榜资金流向、融资融券余额变化、换手率异常信号</li>
+                <li>解禁安排：近期解禁日程、大股东质押比例、原始股东减持意向</li>
+                <li>华泰证券观点变化：是否上调而非下调盈利预测和目标价</li>
+                <li>政策环境变化：信创政策持续性、具身智能监管风险、运营商集中度风险</li>
+                <li>量能变化：能否再次放大确认突破有效性</li>
+                <li>股价与均线关系：是否有效守住10日EMA（30.67元）</li>
+            </ul>
+        </div>
+
+        <!-- 免责声明 -->
+        <div class="disclaimer">
+            <strong>免责声明：</strong>本报告由 AI 系统基于公开信息和模型推理自动整理生成，仅供学习研究与技术演示之用。报告内容仅供参考，不构成任何投资建议。投资者应结合自身风险承受能力，独立判断并承担投资风险。股票市场存在风险，投资需谨慎。本报告不对任何人因使用本报告内容而引致的任何损失承担任何责任。
+        </div>
+    </div>
+</body>
+</html>

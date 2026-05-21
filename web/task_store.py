@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import shutil
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterable
@@ -10,7 +12,7 @@ from typing import Any, Iterable
 from tradingagents.dataflows.utils import safe_ticker_component
 from tradingagents.default_config import DEFAULT_CONFIG
 from tradingagents.graph.checkpointer import clear_checkpoint
-from tradingagents.reporting.compact_html_report import _report_dir, _safe_filename
+from tradingagents.reporting.compact_html_report import _report_dir, _safe_filename, get_stock_name
 
 
 _TASKS_SUBDIR = "web_tasks"
@@ -29,6 +31,26 @@ def _jsonable(value: Any) -> Any:
 def tasks_root() -> Path:
     """Return the root directory for web task records."""
     return Path.home() / ".tradingagents" / _TASKS_SUBDIR
+
+
+def legacy_logs_root() -> Path:
+    """Return the root directory used by the legacy CLI logs."""
+    return Path.home() / ".tradingagents" / "logs"
+
+
+def legacy_cli_date_dir(ticker: str, trade_date: str) -> Path:
+    """Return the legacy CLI directory for one ticker/date run."""
+    return legacy_logs_root() / safe_ticker_component(ticker) / trade_date
+
+
+def legacy_cli_report_dir(ticker: str, trade_date: str) -> Path:
+    """Return the legacy CLI report subdirectory for one ticker/date run."""
+    return legacy_cli_date_dir(ticker, trade_date) / "reports"
+
+
+def legacy_cli_message_log_path(ticker: str, trade_date: str) -> Path:
+    """Return the legacy CLI message log path for one ticker/date run."""
+    return legacy_cli_date_dir(ticker, trade_date) / "message_tool.log"
 
 
 def task_key(ticker: str, trade_date: str) -> str:
@@ -51,6 +73,119 @@ def full_log_path(ticker: str, trade_date: str, config: dict[str, Any] | None = 
     cfg = config or {}
     results_dir = Path(cfg.get("results_dir", DEFAULT_CONFIG["results_dir"]))
     return results_dir / safe_ticker_component(ticker) / "TradingAgentsStrategy_logs" / f"full_states_log_{trade_date}.json"
+
+
+def _read_text_if_exists(path: Path) -> str:
+    """Read a UTF-8 text file if it exists, otherwise return an empty string."""
+    try:
+        if path.exists():
+            return path.read_text(encoding="utf-8")
+    except Exception:
+        pass
+    return ""
+
+
+def _infer_stock_name_from_legacy_reports(ticker: str, report_dir: Path) -> str:
+    """Try to infer the stock name from legacy CLI markdown reports."""
+    patterns = [
+        r"#\s*(?P<name>.+?)\s*[（(](?P<ticker>\d{6})[）)]",
+        r"##\s*.+?[：:]\s*(?P<ticker>\d{6})",
+    ]
+
+    for path in sorted(report_dir.glob("*.md")):
+        try:
+            text = path.read_text(encoding="utf-8")
+        except Exception:
+            continue
+        for pattern in patterns:
+            match = re.search(pattern, text)
+            if match and match.groupdict().get("ticker") == ticker:
+                name = match.groupdict().get("name", "") or ""
+                if name:
+                    return name.strip()
+    return ""
+
+
+def load_legacy_cli_final_state(ticker: str, trade_date: str) -> dict[str, Any] | None:
+    """Rebuild a minimal final_state dict from legacy CLI markdown artifacts."""
+    report_dir = legacy_cli_report_dir(ticker, trade_date)
+    if not report_dir.exists():
+        return None
+
+    section_map = {
+        "market_report.md": "market_report",
+        "sentiment_report.md": "sentiment_report",
+        "news_report.md": "news_report",
+        "fundamentals_report.md": "fundamentals_report",
+        "policy_report.md": "policy_report",
+        "hot_money_report.md": "hot_money_report",
+        "lockup_report.md": "lockup_report",
+        "investment_plan.md": "investment_plan",
+        "trader_investment_plan.md": "trader_investment_plan",
+        "final_trade_decision.md": "final_trade_decision",
+    }
+
+    final_state: dict[str, Any] = {
+        "company_of_interest": ticker,
+        "stock_name": get_stock_name(ticker),
+        "trade_date": trade_date,
+        "market_report": "",
+        "sentiment_report": "",
+        "news_report": "",
+        "fundamentals_report": "",
+        "policy_report": "",
+        "hot_money_report": "",
+        "lockup_report": "",
+        "investment_plan": "",
+        "trader_investment_plan": "",
+        "final_trade_decision": "",
+        "investment_debate_state": {
+            "bull_history": "",
+            "bear_history": "",
+            "history": [],
+            "current_response": "",
+            "judge_decision": "",
+        },
+        "risk_debate_state": {
+            "aggressive_history": "",
+            "conservative_history": "",
+            "neutral_history": "",
+            "history": [],
+            "judge_decision": "",
+        },
+        "data_quality_summary": "",
+        "elapsed_seconds": None,
+        "analysis_mode": "—",
+        "source": "legacy_cli",
+        "legacy_cli": True,
+    }
+
+    found_any = False
+    found_section = False
+    for filename, key in section_map.items():
+        text = _read_text_if_exists(report_dir / filename)
+        if text:
+            final_state[key] = text
+            found_any = True
+            found_section = True
+
+    if not found_any:
+        complete_report = _read_text_if_exists(report_dir / "complete_report.md")
+        if complete_report:
+            final_state["complete_report_md"] = complete_report
+            found_any = True
+
+    if not found_any:
+        return None
+
+    inferred_name = _infer_stock_name_from_legacy_reports(ticker, report_dir)
+    if inferred_name:
+        final_state["stock_name"] = inferred_name
+    final_state["investment_debate_state"]["judge_decision"] = final_state.get("investment_plan", "")
+    final_state["risk_debate_state"]["judge_decision"] = final_state.get("final_trade_decision", "")
+    final_state["analysis_complete"] = found_section
+    final_state["report_complete"] = found_section and bool(final_state.get("complete_report_md"))
+    return final_state
 
 
 def _atomic_write(path: Path, data: str) -> None:
@@ -170,6 +305,23 @@ def delete_task_artifacts(record: dict[str, Any]) -> None:
                 path.unlink()
         except Exception:
             pass
+
+    # Remove legacy CLI artifacts if they exist.
+    legacy_report_dir = legacy_cli_report_dir(ticker, trade_date)
+    legacy_message_log = legacy_cli_message_log_path(ticker, trade_date)
+    try:
+        if legacy_message_log.exists():
+            legacy_message_log.unlink()
+    except Exception:
+        pass
+    try:
+        if legacy_report_dir.exists():
+            shutil.rmtree(legacy_report_dir, ignore_errors=True)
+        legacy_date_dir = legacy_cli_date_dir(ticker, trade_date)
+        if legacy_date_dir.exists() and not any(legacy_date_dir.iterdir()):
+            legacy_date_dir.rmdir()
+    except Exception:
+        pass
 
     # Remove the task record itself.
     path = Path(record.get("task_path") or task_path(ticker, trade_date))

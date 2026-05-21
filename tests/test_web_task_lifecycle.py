@@ -16,6 +16,7 @@ from web.task_store import (
     create_task_record,
     delete_task_artifacts,
     display_status,
+    legacy_cli_date_dir,
     save_task_record,
 )
 
@@ -171,6 +172,38 @@ class TestWebTaskHistory(unittest.TestCase):
 
             self.assertNotIn((ticker, trade_date), {(entry["ticker"], entry["date"]): entry for entry in history})
 
+    def test_legacy_cli_task_with_md_artifacts_appears_and_is_repairable(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            legacy_reports = home / ".tradingagents" / "logs" / "002396" / "2026-05-20" / "reports"
+            legacy_reports.mkdir(parents=True, exist_ok=True)
+            (home / ".tradingagents" / "logs" / "002396" / "2026-05-20" / "message_tool.log").write_text(
+                "16:43:20 [System] Completed analysis for 2026-05-20\n",
+                encoding="utf-8",
+            )
+            (legacy_reports / "market_report.md").write_text("# 星网锐捷（002396）技术分析报告", encoding="utf-8")
+            (legacy_reports / "sentiment_report.md").write_text("# 星网锐捷（002396）市场情绪分析报告", encoding="utf-8")
+            (legacy_reports / "news_report.md").write_text("# 星网锐捷（002396）新闻分析报告", encoding="utf-8")
+            (legacy_reports / "fundamentals_report.md").write_text("# 星网锐捷（002396）基本面研究报告", encoding="utf-8")
+            (legacy_reports / "investment_plan.md").write_text("**Rating**: Underweight", encoding="utf-8")
+            (legacy_reports / "trader_investment_plan.md").write_text("**Rating**: Hold", encoding="utf-8")
+            (legacy_reports / "final_trade_decision.md").write_text("**Rating**: Underweight", encoding="utf-8")
+            (legacy_reports / "complete_report.md").write_text("# 002396 星网锐捷\n", encoding="utf-8")
+
+            with patch("pathlib.Path.home", return_value=home), patch("web.history._get_code_to_name_map", return_value={}), patch(
+                "web.history._report_dir", return_value=home / "report"
+            ):
+                history = get_history(limit=20)
+
+            rows = {(entry["ticker"], entry["date"]): entry for entry in history}
+            self.assertIn(("002396", "2026-05-20"), rows)
+            entry = rows[("002396", "2026-05-20")]
+            self.assertEqual(entry["source"], "legacy_cli")
+            self.assertEqual(entry["status_label"], "可恢复")
+            self.assertEqual(entry["continue_mode"], "repair")
+            self.assertTrue(entry["can_continue"])
+            self.assertEqual(entry["view_mode"], "task")
+
 
 class TestWebTaskDeletion(unittest.TestCase):
     def test_delete_task_artifacts_removes_generated_files(self) -> None:
@@ -220,6 +253,49 @@ class TestWebTaskDeletion(unittest.TestCase):
             self.assertFalse(log_path.exists())
             self.assertFalse(report_path.exists())
             self.assertFalse(risk_path.exists())
+
+    def test_delete_task_artifacts_removes_legacy_cli_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            legacy_dir = home / ".tradingagents" / "logs" / "002396" / "2026-05-20"
+            legacy_reports = legacy_dir / "reports"
+            legacy_reports.mkdir(parents=True, exist_ok=True)
+            legacy_log = legacy_dir / "message_tool.log"
+            legacy_log.write_text("x", encoding="utf-8")
+            (legacy_reports / "complete_report.md").write_text("x", encoding="utf-8")
+            (legacy_reports / "market_report.md").write_text("x", encoding="utf-8")
+
+            record = {
+                "ticker": "002396",
+                "trade_date": "2026-05-20",
+                "config": {"results_dir": str(home / "results"), "data_cache_dir": str(home / "cache")},
+                "task_path": "",
+            }
+
+            with patch("pathlib.Path.home", return_value=home), patch("web.task_store._report_dir", return_value=home / "report"), patch(
+                "web.task_store.clear_checkpoint"
+            ):
+                delete_task_artifacts(record)
+
+            self.assertFalse(legacy_log.exists())
+            self.assertFalse(legacy_reports.exists())
+
+    def test_legacy_cli_final_state_can_be_loaded(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            legacy_reports = home / ".tradingagents" / "logs" / "002396" / "2026-05-20" / "reports"
+            legacy_reports.mkdir(parents=True, exist_ok=True)
+            (legacy_reports / "market_report.md").write_text("# 星网锐捷（002396）技术分析报告", encoding="utf-8")
+            (legacy_reports / "final_trade_decision.md").write_text("**Rating**: Underweight", encoding="utf-8")
+
+            with patch("pathlib.Path.home", return_value=home), patch("tradingagents.reporting.compact_html_report.get_stock_name", return_value="星网锐捷"):
+                from web.task_store import load_legacy_cli_final_state
+
+                state = load_legacy_cli_final_state("002396", "2026-05-20")
+
+            self.assertIsNotNone(state)
+            self.assertEqual(state["stock_name"], "星网锐捷")
+            self.assertIn("002396", state["market_report"])
 
 
 class TestWebRunnerRegression(unittest.TestCase):

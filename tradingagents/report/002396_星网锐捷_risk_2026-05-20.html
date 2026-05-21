@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>风控评估报告 - 002396 星网锐捷</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Noto Sans SC", "Segoe UI", Roboto, sans-serif;
+            background-color: #ffffff;
+            color: #333333;
+            line-height: 1.6;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 30px;
+        }
+
+        .header {
+            border-bottom: 3px solid #333;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #1a1a1a;
+        }
+
+        .header-info {
+            display: flex;
+            gap: 30px;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .header-info span {
+            display: flex;
+            align-items: center;
+        }
+
+        .rating-badge {
+            display: inline-block;
+            background-color: #d32f2f;
+            color: #fff;
+            padding: 5px 15px;
+            border-radius: 3px;
+            font-weight: bold;
+            font-size: 16px;
+            margin-top: 10px;
+        }
+
+        .section {
+            margin-bottom: 30px;
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #1a1a1a;
+            border-left: 4px solid #333;
+            padding-left: 12px;
+            margin-bottom: 15px;
+        }
+
+        .four-perspectives {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .perspective-card {
+            border: 1px solid #e0e0e0;
+            border-radius: 5px;
+            padding: 20px;
+            background: #fafafa;
+        }
+
+        .perspective-card.aggressive {
+            border-left: 4px solid #e65100;
+        }
+
+        .perspective-card.conservative {
+            border-left: 4px solid #1565c0;
+        }
+
+        .perspective-card.neutral {
+            border-left: 4px solid #558b2f;
+        }
+
+        .perspective-card.decision {
+            border-left: 4px solid #c62828;
+            background: #fff8f8;
+        }
+
+        .perspective-card h3 {
+            font-size: 16px;
+            margin-bottom: 12px;
+            color: #333;
+        }
+
+        .perspective-card ul {
+            padding-left: 20px;
+        }
+
+        .perspective-card li {
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .executive-summary {
+            background-color: #f5f5f5;
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 30px;
+        }
+
+        .executive-summary h2 {
+            font-size: 18px;
+            margin-bottom: 15px;
+            color: #1a1a1a;
+        }
+
+        .executive-summary p {
+            font-size: 14px;
+            line-height: 1.8;
+        }
+
+        .price-target {
+            display: inline-block;
+            background-color: #333;
+            color: #fff;
+            padding: 3px 10px;
+            border-radius: 3px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+
+        .risk-summary {
+            background-color: #fafafa;
+            padding: 20px;
+            border-radius: 5px;
+        }
+
+        .risk-item {
+            padding: 12px 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .risk-item:last-child {
+            border-bottom: none;
+        }
+
+        .risk-item .label {
+            font-weight: bold;
+            color: #555;
+            font-size: 14px;
+        }
+
+        .risk-item .value {
+            margin-top: 5px;
+            font-size: 14px;
+            color: #333;
+        }
+
+        .risk-warning {
+            background-color: #ffebee;
+            border: 2px solid #d32f2f;
+            border-radius: 5px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+        .risk-warning h2 {
+            color: #c62828;
+            font-size: 18px;
+            margin-bottom: 15px;
+        }
+
+        .risk-warning ul {
+            padding-left: 25px;
+        }
+
+        .risk-warning li {
+            margin-bottom: 10px;
+            font-size: 14px;
+            color: #c62828;
+        }
+
+        .key-data {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .key-data-item {
+            background-color: #ffebee;
+            border: 1px solid #ef9a9a;
+            padding: 10px 15px;
+            border-radius: 4px;
+            min-width: 120px;
+        }
+
+        .key-data-item .label {
+            font-size: 12px;
+            color: #c62828;
+        }
+
+        .key-data-item .value {
+            font-size: 16px;
+            font-weight: bold;
+            color: #c62828;
+        }
+
+        .footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #e0e0e0;
+            font-size: 12px;
+            color: #999;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 标题区 -->
+        <div class="header">
+            <h1>风控评估报告</h1>
+            <div class="header-info">
+                <span><strong>股票代码：</strong>002396 星网锐捷</span>
+                <span><strong>分析日期：</strong>2025年</span>
+                <span><strong>综合裁决评分：</strong>2.56/5</span>
+            </div>
+            <div>
+                <span class="rating-badge">评级：低配（Underweight）</span>
+            </div>
+        </div>
+
+        <!-- 执行摘要 -->
+        <div class="executive-summary">
+            <h2>执行摘要</h2>
+            <p>002396星网锐捷综合裁决评分2.56/5，低于中立线。建议现有持仓减仓至30%以下，新资金不建做多位。反弹至33-34元区间减持，止损设于29.50元。当前价位盈亏比不利做多（向上空间约8%，向下风险约8-13%），需等待Q2基本面验证后再评估加仓。</p>
+        </div>
+
+        <!-- 四方观点对比表 -->
+        <div class="section">
+            <div class="section-title">四方观点对比</div>
+            <div class="four-perspectives">
+                <div class="perspective-card aggressive">
+                    <h3>激进观点（看多/激进风险承受）</h3>
+                    <ul>
+                        <li>目标价34.0元，存在一定上行空间</li>
+                        <li>若市场情绪好转，股价有反弹可能</li>
+                        <li>看好公司长期发展潜力</li>
+                    </ul>
+                </div>
+                <div class="perspective-card conservative">
+                    <h3>保守观点（看空/谨慎风险承受）</h3>
+                    <ul>
+                        <li>Q1政府补助骤降50%，基本面存忧</li>
+                        <li>技术面BOLL乖离率10.7%显示超买</li>
+                        <li>量能萎缩至48%，上涨动能不足</li>
+                        <li>建议止损位29.50元控制风险</li>
+                    </ul>
+                </div>
+                <div class="perspective-card neutral">
+                    <h3>中性观点（平衡视角）</h3>
+                    <ul>
+                        <li>综合评分2.56低于中立线3.0</li>
+                        <li>向上空间约8%，向下风险约8-13%</li>
+                        <li>需等待Q2基本面数据验证</li>
+                        <li>全年117%增长预测与Q1补助下降存在矛盾</li>
+                    </ul>
+                </div>
+                <div class="perspective-card decision">
+                    <h3>风控决策（最终结论）</h3>
+                    <ul>
+                        <li>建议减仓至30%以下</li>
+                        <li>新资金不建做多位</li>
+                        <li>反弹至33-34元区间减持</li>
+                        <li>止损设于29.50元</li>
+                        <li>目标价<span class="price-target">34.0元</span></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- 核心风险摘要 -->
+        <div class="section">
+            <div class="section-title">核心风险摘要</div>
+            <div class="risk-summary">
+                <div class="risk-item">
+                    <div class="label">主要风险点</div>
+                    <div class="value">
+                        <ul>
+                            <li>Q1政府补助骤降50%与全年117%增长预测存在数学矛盾，基本面存结构性弱点</li>
+                            <li>华泰下调目标价19%+盈利预测19%构成实质性警告</li>
+                            <li>技术面BOLL乖离率10.7%叠加量能萎缩至48%，短期调整压力大</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="risk-item">
+                    <div class="label">风险等级评估</div>
+                    <div class="value">
+                        <div class="key-data">
+                            <div class="key-data-item">
+                                <div class="label">综合评分</div>
+                                <div class="value">2.56/5</div>
+                            </div>
+                            <div class="key-data-item">
+                                <div class="label">评级</div>
+                                <div class="value">低配</div>
+                            </div>
+                            <div class="key-data-item">
+                                <div class="label">BOLL乖离率</div>
+                                <div class="value">10.7%</div>
+                            </div>
+                            <div class="key-data-item">
+                                <div class="label">量能萎缩</div>
+                                <div class="value">48%</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="risk-item">
+                    <div class="label">关键数据支撑</div>
+                    <div class="value">
+                        <ul>
+                            <li>目标价：34.0元</li>
+                            <li>止损位：29.50元</li>
+                            <li>向上空间：约8%</li>
+                            <li>向下风险：约8-13%</li>
+                            <li>建议持仓上限：30%</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 风险提示区域 -->
+        <div class="risk-warning">
+            <h2>⚠️ 风险提示</h2>
+            <ul>
+                <li><strong>基本面结构性问题：</strong>Q1政府补助骤降50%，但全年增长预测高达117%，两者存在数学矛盾，需警惕业绩失真风险</li>
+                <li><strong>机构下调风险：</strong>华泰证券下调目标价19%及盈利预测19%，单一机构预测可靠性虽不足，但构成实质性警告信号</li>
+                <li><strong>技术面压力：</strong>BOLL乖离率达10.7%显示短期超买，叠加量能萎缩48%，调整压力较大</li>
+                <li><strong>致命风险缺失：</strong>三份F级报告缺失涵盖A股最致命风险（政策黑天鹅、热钱撤退、解禁减持），需额外关注</li>
+                <li><strong>历史趋势警示：</strong>历史业绩连续6年无法超越2019年高点，趋势反转需强劲基本面验证</li>
+            </ul>
+        </div>
+
+        <!-- 页脚 -->
+        <div class="footer">
+            本报告基于 TradingAgents-Astock 系统输出的风控评估内容整理，仅供参考，不构成投资建议。
+        </div>
+    </div>
+</body>
+</html>

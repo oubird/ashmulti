@@ -12,8 +12,12 @@ from tradingagents.reporting.compact_html_report import _get_code_to_name_map, _
 from web.task_store import (
     can_continue,
     continue_mode,
+    legacy_cli_message_log_path,
+    legacy_cli_report_dir,
+    legacy_logs_root,
     display_status,
     list_task_records,
+    load_legacy_cli_final_state,
     task_key,
     view_mode,
 )
@@ -53,6 +57,18 @@ def _report_files_exist(ticker: str, trade_date: str, stock_name: str = "") -> t
     compact = next((p for p in compact_candidates if p.exists()), None)
     risk = next((p for p in risk_candidates if p.exists()), None)
     return bool(compact), bool(risk), str(compact) if compact else "", str(risk) if risk else ""
+
+
+def _legacy_cli_report_paths(ticker: str, trade_date: str) -> tuple[Path, Path]:
+    """Return the legacy CLI complete report and report directory paths."""
+    report_dir = legacy_cli_report_dir(ticker, trade_date)
+    return report_dir / "complete_report.md", report_dir
+
+
+def _legacy_cli_artifacts_exist(ticker: str, trade_date: str) -> bool:
+    """Return whether legacy CLI markdown artifacts exist for a task."""
+    report_dir = legacy_cli_report_dir(ticker, trade_date)
+    return report_dir.exists() and any(report_dir.glob("*.md"))
 
 
 def _parse_log_entry(log_file: Path, c2n: dict[str, str] | None) -> dict[str, Any] | None:
@@ -108,10 +124,69 @@ def _parse_log_entry(log_file: Path, c2n: dict[str, str] | None) -> dict[str, An
         "continue_mode": "repair" if not report_complete else "none",
         "can_continue": not report_complete,
         "source": "log",
+        "task_record_present": False,
         "sort_ts": log_file.stat().st_mtime,
     }
     base["status_label"] = display_status(base)
     return base
+
+
+def _parse_legacy_cli_entry(ticker: str, trade_date: str, c2n: dict[str, str] | None) -> dict[str, Any] | None:
+    """Convert legacy CLI markdown artifacts into a normalized history entry."""
+    if not _legacy_cli_artifacts_exist(ticker, trade_date):
+        return None
+
+    final_state = load_legacy_cli_final_state(ticker, trade_date)
+    if not final_state:
+        return None
+
+    stock_name = final_state.get("stock_name") or ""
+    if not stock_name and c2n is not None:
+        stock_name = c2n.get(ticker, "")
+
+    compact_ok, risk_ok, compact_path, risk_path = _report_files_exist(ticker, trade_date, stock_name)
+    complete_report, report_dir = _legacy_cli_report_paths(ticker, trade_date)
+    if not compact_ok and complete_report.exists():
+        compact_path = str(complete_report)
+        compact_ok = True
+
+    report_complete = bool(compact_ok and risk_ok)
+    sort_ts = max((p.stat().st_mtime for p in report_dir.glob("*.md")), default=report_dir.stat().st_mtime if report_dir.exists() else 0.0)
+    html_report = _report_dir() / f"{_safe_filename(ticker)}_{_safe_filename(stock_name or 'unknown')}_{trade_date}.html"
+    risk_report = _report_dir() / f"{_safe_filename(ticker)}_{_safe_filename(stock_name or 'unknown')}_risk_{trade_date}.html"
+
+    entry = {
+        "ticker": ticker,
+        "name": stock_name or "",
+        "date": trade_date,
+        "trade_date": trade_date,
+        "elapsed_seconds": final_state.get("elapsed_seconds"),
+        "elapsed_str": _format_elapsed(final_state.get("elapsed_seconds")),
+        "analysis_mode": final_state.get("analysis_mode") or "—",
+        "stock_name": stock_name or "",
+        "analysis_complete": True,
+        "report_complete": report_complete,
+        "status": "completed" if report_complete else "recoverable",
+        "error": "",
+        "report_error": "",
+        "current_stage": "",
+        "completed_stages": [],
+        "view_mode": "report" if report_complete else "task",
+        "view_path": str(html_report if html_report.exists() else complete_report if complete_report.exists() else report_dir),
+        "path": str(html_report if html_report.exists() else complete_report if complete_report.exists() else report_dir),
+        "log_path": str(legacy_cli_message_log_path(ticker, trade_date)),
+        "task_path": "",
+        "report_path": str(html_report if html_report.exists() else complete_report if complete_report.exists() else compact_path),
+        "risk_report_path": str(risk_report if risk_report.exists() else risk_path),
+        "continue_mode": "repair" if not report_complete else "none",
+        "can_continue": not report_complete,
+        "source": "legacy_cli",
+        "task_record_present": False,
+        "legacy_cli": True,
+        "sort_ts": sort_ts,
+    }
+    entry["status_label"] = display_status(entry)
+    return entry
 
 
 def safe_ticker_component_for_path(ticker: str) -> str:
@@ -229,6 +304,31 @@ def _load_task_rows(c2n: dict[str, str] | None) -> dict[str, dict[str, Any]]:
                 rows[key] = _merge_record_and_log(existing, log_entry, c2n)
             else:
                 rows[key] = log_entry
+
+    legacy_root = legacy_logs_root()
+    if legacy_root.exists():
+        for ticker_dir in legacy_root.iterdir():
+            if not ticker_dir.is_dir():
+                continue
+            ticker = ticker_dir.name
+            legacy_message = ticker_dir / "message_tool.log"
+            if legacy_message.exists():
+                # Legacy CLI root can also contain the flat message log; keep it for view-only fallbacks.
+                pass
+            for report_dir in ticker_dir.iterdir():
+                if not report_dir.is_dir():
+                    continue
+                if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", report_dir.name):
+                    continue
+                trade_date = report_dir.name
+                key = task_key(ticker, trade_date)
+                if key in deleted_keys:
+                    continue
+                if key in rows and rows[key].get("source") != "legacy_cli":
+                    continue
+                legacy_entry = _parse_legacy_cli_entry(ticker, trade_date, c2n)
+                if legacy_entry:
+                    rows[key] = legacy_entry
 
     return rows
 

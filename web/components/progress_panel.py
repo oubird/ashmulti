@@ -41,11 +41,13 @@ def _truncate(text: str, max_len: int = 150) -> str:
 def render_progress(tracker: ProgressTracker) -> None:
     """Render the pipeline progress panel."""
 
+    is_repair_mode = getattr(tracker, "run_mode", "analysis") == "repair"
+
     st.markdown(
         f"""
         <div style="text-align:center; margin:1rem 0 0.5rem;">
             <span style="font-size:1.6rem; font-weight:700; color:#1f2937;">
-                分析进行中
+                {'补报告中' if is_repair_mode else '分析进行中'}
             </span>
             <span style="font-size:1.1rem; color:#6b7280; margin-left:0.8rem;">
                 {tracker.ticker}
@@ -58,7 +60,10 @@ def render_progress(tracker: ProgressTracker) -> None:
     completed = len(tracker.completed_stages)
     total = len(PIPELINE_STAGES)
     pct = completed / total if total else 0
-    st.progress(pct, text=f"{completed}/{total} 阶段完成  ·  {_format_time(tracker.elapsed)}")
+    progress_text = f"{completed}/{total} 阶段完成  ·  {_format_time(tracker.elapsed)}"
+    if is_repair_mode:
+        progress_text = f"补报告中  ·  {_format_time(tracker.elapsed)}"
+    st.progress(pct, text=progress_text)
 
     analyst_stages = PIPELINE_STAGES[:7]
     post_stages = PIPELINE_STAGES[7:]
