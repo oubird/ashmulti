@@ -95,6 +95,7 @@ def render_report(
     st.caption("⚠️ 本报告由 AI 自动生成，仅供学习研究，不构成投资建议。", help="")
 
     # ── Export buttons ──────────────────────────────────────────────────────
+    html_exists, html_bytes, html_filename = _resolve_html_report(ticker, trade_date)
     zip_bytes = _build_analyst_reports_zip(final_state)
 
     col_summary, col_analyst = st.columns([1, 1])
