@@ -121,10 +121,7 @@ def render_report(
 
     # ── Compact HTML summary report (embedded, no iframe) ──────────────────
     if html_exists:
-        st.markdown(
-            f'<div class="embedded-report">{_clean_html_for_embed(html_bytes.decode("utf-8"))}</div>',
-            unsafe_allow_html=True,
-        )
+        st.html(_clean_html_for_embed(html_bytes.decode("utf-8")))
     else:
         st.info("总结报告尚未生成")
 
@@ -175,10 +172,7 @@ def _render_raw_markdown(final_state: dict[str, Any], ticker: str, trade_date: s
         st.markdown("### 🛡️ 风控评估")
         risk_html_exists, risk_html_bytes = _resolve_risk_html_report(ticker, trade_date)
         if risk_html_exists:
-            st.markdown(
-                f'<div class="embedded-report">{_clean_html_for_embed(risk_html_bytes.decode("utf-8"))}</div>',
-                unsafe_allow_html=True,
-            )
+            st.html(_clean_html_for_embed(risk_html_bytes.decode("utf-8")))
         else:
             tab_agg, tab_con, tab_neu, tab_rj = st.tabs(["激进", "保守", "中性", "风控决策"])
             with tab_agg:
