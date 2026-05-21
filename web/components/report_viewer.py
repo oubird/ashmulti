@@ -80,30 +80,16 @@ def render_report(
     if elapsed_str:
         header_line += f"  {elapsed_str}"
 
-    # Core decision content for the summary card
-    final_decision = final_state.get("final_trade_decision", "")
-    decision_md = _strip_think(str(final_decision)) if final_decision else "暂无最终投资建议"
-
     st.markdown(
         f"""
         <div style="background:#ffffff; border:1px solid #e5e7eb; border-radius:12px; padding:1.2rem 1.5rem; margin:1rem 0 1.5rem;">
-            <div style="font-size:1.05rem; font-weight:700; color:#1f2937; margin-bottom:0.8rem;">
+            <div style="font-size:1.05rem; font-weight:700; color:#1f2937;">
                 {header_line}
-            </div>
-            <div style="border-top:1px solid #e5e7eb; padding-top:0.8rem; color:#374151; line-height:1.7;">
-                {decision_md}
             </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
-
-    # ── Compact HTML summary report ────────────────────────────────────────
-    html_exists, html_bytes, html_filename = _resolve_html_report(ticker, trade_date)
-    if html_exists:
-        st.components.v1.html(html_bytes.decode("utf-8"), height=900, scrolling=True)
-    else:
-        st.info("总结报告尚未生成")
 
     st.markdown("---")
     st.caption("⚠️ 本报告由 AI 自动生成，仅供学习研究，不构成投资建议。", help="")
