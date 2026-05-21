@@ -1,20 +1,33 @@
 from typing import Any, Optional
 
-from langchain_google_genai import ChatGoogleGenerativeAI
+try:
+    from langchain_google_genai import ChatGoogleGenerativeAI
+except ImportError:  # pragma: no cover - exercised when google extra is absent
+    ChatGoogleGenerativeAI = None  # type: ignore[assignment]
 
 from .base_client import BaseLLMClient, normalize_content
 from .validators import validate_model
 
 
-class NormalizedChatGoogleGenerativeAI(ChatGoogleGenerativeAI):
-    """ChatGoogleGenerativeAI with normalized content output.
+if ChatGoogleGenerativeAI is not None:
+    class NormalizedChatGoogleGenerativeAI(ChatGoogleGenerativeAI):
+        """ChatGoogleGenerativeAI with normalized content output.
 
-    Gemini 3 models return content as list of typed blocks.
-    This normalizes to string for consistent downstream handling.
-    """
+        Gemini 3 models return content as list of typed blocks.
+        This normalizes to string for consistent downstream handling.
+        """
 
-    def invoke(self, input, config=None, **kwargs):
-        return normalize_content(super().invoke(input, config, **kwargs))
+        def invoke(self, input, config=None, **kwargs):
+            return normalize_content(super().invoke(input, config, **kwargs))
+else:
+    class NormalizedChatGoogleGenerativeAI:  # pragma: no cover - simple import guard
+        """Fallback stub when langchain-google-genai is not installed."""
+
+        def __init__(self, *args, **kwargs):
+            raise ImportError(
+                "langchain-google-genai is not installed. "
+                "Install the optional google extra to use GoogleClient."
+            )
 
 
 class GoogleClient(BaseLLMClient):

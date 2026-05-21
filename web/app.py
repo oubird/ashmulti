@@ -5,6 +5,7 @@ from __future__ import annotations
 import sys
 from datetime import date, timedelta
 from pathlib import Path
+from typing import Any
 
 import streamlit as st
 from dotenv import load_dotenv
@@ -19,14 +20,22 @@ from tradingagents.default_config import DEFAULT_CONFIG  # noqa: E402
 
 from web.components.progress_panel import render_progress  # noqa: E402
 from web.components.report_viewer import render_report  # noqa: E402
+from web.components.task_viewer import render_task_detail  # noqa: E402
 from web.components.sidebar import _resolve_user_input  # noqa: E402
 from web.history import extract_signal, get_history, load_analysis  # noqa: E402
 from web.progress import ProgressTracker  # noqa: E402
 from web.runner import get_active_tracker, request_stop, run_analysis_in_thread  # noqa: E402
+from web.task_store import (  # noqa: E402
+    apply_task_snapshot,
+    build_resume_config,
+    delete_task_artifacts,
+    load_task_record_by_path,
+    save_task_record,
+)
 
 # ── Page config ──────────────────────────────────────────────────────────────
 
-_VERSION = "V1.0.1"
+_VERSION = "V1.0.3"
 
 st.set_page_config(
     page_title="A股多专家投研系统",
@@ -299,12 +308,32 @@ def _render_welcome() -> None:
     )
 
 
+def _status_color(label: str) -> str:
+    """Return a simple color for history/status labels."""
+    return {
+        "完成": "#16a34a",
+        "中断": "#dc2626",
+        "进行中": "#f97316",
+        "可恢复": "#2563eb",
+        "已删除": "#6b7280",
+    }.get(label, "#6b7280")
+
+
 # ── Home page ────────────────────────────────────────────────────────────────
 
 def _render_home() -> None:
     """Render the home page: welcome, progress, report, or error."""
     tracker: ProgressTracker | None = st.session_state.get("tracker")
+    viewing_task: dict[str, Any] | None = st.session_state.get("viewing_task")
     viewing_history: str | None = st.session_state.get("viewing_history")
+
+    # State 0.5: Viewing an interrupted or resumable task
+    if viewing_task:
+        try:
+            render_task_detail(viewing_task)
+        except Exception as exc:
+            st.error(f"加载任务详情失败: {exc}")
+        return
 
     # State 1: Viewing a historical analysis
     if viewing_history:
@@ -335,6 +364,8 @@ def _render_home() -> None:
 
     # State 3: Analysis complete
     if tracker and tracker.is_complete:
+        if tracker.postprocess_error:
+            st.warning(f"任务已完成，但报告生成存在问题：{tracker.postprocess_error}")
         render_report(
             tracker.final_state,
             tracker.ticker,
@@ -380,16 +411,18 @@ def _render_history_page() -> None:
     )
 
     # Header row
-    hdr_col1, hdr_col2, hdr_col3, hdr_col4, hdr_col5 = st.columns([3, 2, 1.5, 1.5, 1])
+    hdr_col1, hdr_col2, hdr_col3, hdr_col4, hdr_col5, hdr_col6 = st.columns([3, 2, 1.2, 1.5, 1.2, 1.8])
     with hdr_col1:
         st.markdown("<span style='color:#374151; font-weight:600; font-size:0.9rem;'>报告名称</span>", unsafe_allow_html=True)
     with hdr_col2:
         st.markdown("<span style='color:#374151; font-weight:600; font-size:0.9rem;'>分析日期</span>", unsafe_allow_html=True)
     with hdr_col3:
-        st.markdown("<span style='color:#374151; font-weight:600; font-size:0.9rem;'>分析模式</span>", unsafe_allow_html=True)
+        st.markdown("<span style='color:#374151; font-weight:600; font-size:0.9rem;'>状态</span>", unsafe_allow_html=True)
     with hdr_col4:
-        st.markdown("<span style='color:#374151; font-weight:600; font-size:0.9rem;'>分析耗时</span>", unsafe_allow_html=True)
+        st.markdown("<span style='color:#374151; font-weight:600; font-size:0.9rem;'>分析模式</span>", unsafe_allow_html=True)
     with hdr_col5:
+        st.markdown("<span style='color:#374151; font-weight:600; font-size:0.9rem;'>分析耗时</span>", unsafe_allow_html=True)
+    with hdr_col6:
         st.markdown("<span style='color:#374151; font-weight:600; font-size:0.9rem;'>操作</span>", unsafe_allow_html=True)
 
     st.markdown("<div style='height:0.5rem; background:#f8f9fa; margin:0 -1rem;'></div>", unsafe_allow_html=True)
@@ -400,22 +433,47 @@ def _render_history_page() -> None:
         date_str = entry["date"]
         elapsed = entry["elapsed_str"]
         mode = entry.get("analysis_mode", "—")
+        status_label = entry.get("status_label", "—")
         display_name = f"{ticker} {name}" if name else ticker
 
-        col1, col2, col3, col4, col5 = st.columns([3, 2, 1.5, 1.5, 1])
+        col1, col2, col3, col4, col5, col6 = st.columns([3, 2, 1.2, 1.5, 1.2, 1.8])
         with col1:
             st.markdown(f"<span style='color:#1f2937; font-weight:500;'>{display_name}</span>", unsafe_allow_html=True)
         with col2:
             st.markdown(f"<span style='color:#6b7280; font-size:0.9rem;'>{date_str}</span>", unsafe_allow_html=True)
         with col3:
-            st.markdown(f"<span style='color:#6b7280; font-size:0.9rem;'>{mode}</span>", unsafe_allow_html=True)
+            st.markdown(
+                f"<span style='color:{_status_color(status_label)}; font-size:0.9rem; font-weight:600;'>{status_label}</span>",
+                unsafe_allow_html=True,
+            )
         with col4:
-            st.markdown(f"<span style='color:#6b7280; font-size:0.9rem;'>{elapsed}</span>", unsafe_allow_html=True)
+            st.markdown(f"<span style='color:#6b7280; font-size:0.9rem;'>{mode}</span>", unsafe_allow_html=True)
         with col5:
-            if st.button("查看", key=f"view_{ticker}_{date_str}", type="secondary"):
-                st.session_state["viewing_history"] = entry["path"]
-                st.session_state["current_page"] = "home"
-                st.rerun()
+            st.markdown(f"<span style='color:#6b7280; font-size:0.9rem;'>{elapsed}</span>", unsafe_allow_html=True)
+        with col6:
+            a1, a2, a3 = st.columns(3)
+            with a1:
+                if st.button("查看", key=f"view_{ticker}_{date_str}", type="secondary", use_container_width=True):
+                    if entry.get("view_mode") == "report":
+                        st.session_state["viewing_history"] = entry["path"]
+                        st.session_state.pop("viewing_task", None)
+                    else:
+                        st.session_state["viewing_task"] = entry
+                        st.session_state.pop("viewing_history", None)
+                    st.session_state["current_page"] = "home"
+                    st.rerun()
+            with a2:
+                if st.button(
+                    "继续",
+                    key=f"continue_{ticker}_{date_str}",
+                    disabled=not bool(entry.get("can_continue")),
+                    type="secondary",
+                    use_container_width=True,
+                ):
+                    _queue_history_continue(entry)
+            with a3:
+                if st.button("删除", key=f"delete_{ticker}_{date_str}", type="secondary", use_container_width=True):
+                    _delete_history_entry(entry)
 
         if i < len(history) - 1:
             st.markdown("<div style='height:1px; background:#f3f4f6; margin:0 -1rem;'></div>", unsafe_allow_html=True)
@@ -455,24 +513,14 @@ def _render_new_analysis_page() -> None:
                     st.success(f"✅ {ticker.strip()} → {resolved_code}")
 
                 trade_date = (date.today() - timedelta(days=1)).strftime("%Y-%m-%d")
-                tracker = ProgressTracker(
-                    ticker=resolved_code,
-                    trade_date=trade_date,
-                )
-                st.session_state["tracker"] = tracker
-                st.session_state["current_page"] = "home"
-                # Clear history cache so the new analysis appears next time
-                st.session_state.pop("history_cache", None)
-
                 depth_map = {"快速": 1, "中等": 3, "深度": 5}
-                config = _build_config(depth=depth_map[depth])
-                run_analysis_in_thread(
-                    ticker=resolved_code,
-                    trade_date=trade_date,
-                    config=config,
-                    tracker=tracker,
-                    selected_analysts=_SELECTED_ANALYSTS,
-                )
+                request = {
+                    "ticker": resolved_code,
+                    "trade_date": trade_date,
+                    "config": _build_config(depth=depth_map[depth]),
+                    "selected_analysts": _SELECTED_ANALYSTS,
+                }
+                _launch_analysis_request(request)
                 st.rerun()
 
 
@@ -500,27 +548,126 @@ def _build_config(depth: int = 5) -> dict:
     config["max_risk_discuss_rounds"] = depth
     config["output_language"] = "Chinese"
     config["anthropic_effort"] = "high"
+    config["checkpoint_enabled"] = True
     return config
+
+
+def _launch_analysis_request(request: dict[str, Any]) -> None:
+    """Start a background analysis or report-repair request."""
+    ticker = request["ticker"]
+    trade_date = request.get("trade_date") or (date.today() - timedelta(days=1)).strftime("%Y-%m-%d")
+    config = request.get("config") or _build_config()
+    selected_analysts = request.get("selected_analysts") or _SELECTED_ANALYSTS
+    task_record = request.get("task_record")
+    repair_only = bool(request.get("repair_only"))
+
+    tracker = ProgressTracker(
+        ticker=ticker,
+        trade_date=trade_date,
+    )
+    if task_record:
+        apply_task_snapshot(tracker, task_record)
+        tracker.error = None
+        tracker.postprocess_error = None
+
+    st.session_state["tracker"] = tracker
+    st.session_state["current_page"] = "home"
+    st.session_state.pop("viewing_task", None)
+    st.session_state.pop("viewing_history", None)
+    st.session_state.pop("history_cache", None)
+
+    run_analysis_in_thread(
+        ticker=ticker,
+        trade_date=trade_date,
+        config=config,
+        tracker=tracker,
+        selected_analysts=selected_analysts,
+        task_record=task_record,
+        repair_only=repair_only,
+    )
+
+
+def _queue_history_continue(entry: dict[str, Any]) -> None:
+    """Queue a continue/repair request from a history row."""
+    mode = entry.get("continue_mode", "none")
+    if mode == "none":
+        return
+
+    task_record = None
+    config = _build_config()
+    selected_analysts = _SELECTED_ANALYSTS
+
+    task_path = entry.get("task_path") or ""
+    if task_path:
+        task_record = load_task_record_by_path(task_path)
+
+    if task_record and isinstance(task_record.get("config"), dict):
+        config = build_resume_config(task_record)
+        selected_analysts = task_record.get("selected_analysts") or selected_analysts
+    elif task_record is None and mode == "repair":
+        # Repair-only requests can run from the currently configured model.
+        config = _build_config()
+
+    request = {
+        "ticker": entry["ticker"],
+        "trade_date": entry["date"],
+        "config": config,
+        "selected_analysts": selected_analysts,
+        "task_record": task_record,
+        "repair_only": mode == "repair",
+    }
+    st.session_state["start_analysis"] = request
+    st.session_state.pop("viewing_task", None)
+    st.session_state.pop("viewing_history", None)
+    st.session_state.pop("history_cache", None)
+    st.session_state["current_page"] = "home"
+    st.rerun()
+
+
+def _delete_history_entry(entry: dict[str, Any]) -> None:
+    """Delete the task represented by a history row."""
+    task_path = entry.get("task_path") or ""
+    task_record = load_task_record_by_path(task_path) if task_path else None
+
+    active = get_active_tracker()
+    is_active_task = bool(
+        active
+        and active.is_running
+        and active.ticker == entry["ticker"]
+        and active.trade_date == entry["date"]
+    )
+
+    if is_active_task:
+        record = dict(task_record or entry)
+        record.setdefault("ticker", entry["ticker"])
+        record.setdefault("trade_date", entry["date"])
+        record.setdefault("task_path", entry.get("task_path") or "")
+        if not record.get("config"):
+            record["config"] = _build_config()
+        record["delete_requested"] = True
+        save_task_record(record)
+        request_stop()
+        st.session_state.pop("tracker", None)
+    else:
+        record = dict(task_record or entry)
+        record.setdefault("ticker", entry["ticker"])
+        record.setdefault("trade_date", entry["date"])
+        record.setdefault("task_path", entry.get("task_path") or "")
+        if not record.get("config"):
+            record["config"] = _build_config()
+        delete_task_artifacts(record)
+
+    st.session_state.pop("viewing_task", None)
+    st.session_state.pop("viewing_history", None)
+    st.session_state.pop("history_cache", None)
+    st.rerun()
 
 
 # ── Handle "Start Analysis" trigger (legacy, from sidebar era) ───────────────
 
 start_req = st.session_state.pop("start_analysis", None)
 if start_req:
-    trade_date = (date.today() - timedelta(days=1)).strftime("%Y-%m-%d")
-    tracker = ProgressTracker(
-        ticker=start_req["ticker"],
-        trade_date=trade_date,
-    )
-    st.session_state["tracker"] = tracker
-    st.session_state["current_page"] = "home"
-    run_analysis_in_thread(
-        ticker=start_req["ticker"],
-        trade_date=trade_date,
-        config=_build_config(),
-        tracker=tracker,
-        selected_analysts=_SELECTED_ANALYSTS,
-    )
+    _launch_analysis_request(start_req)
 
 
 # ── Reconnect to an active background run after page refresh ─────────────────
