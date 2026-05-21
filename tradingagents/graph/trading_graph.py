@@ -383,10 +383,11 @@ class TradingAgentsGraph:
 
         return final_state, self.process_signal(final_state["final_trade_decision"])
 
-    def _log_state(self, trade_date, final_state, elapsed_seconds=None, analysis_mode=None):
+    def _log_state(self, trade_date, final_state, elapsed_seconds=None, analysis_mode=None, stock_name=None):
         """Log the final state to a JSON file."""
         self.log_states_dict[str(trade_date)] = {
             "company_of_interest": final_state["company_of_interest"],
+            "stock_name": stock_name,
             "trade_date": final_state["trade_date"],
             "market_report": final_state["market_report"],
             "sentiment_report": final_state["sentiment_report"],

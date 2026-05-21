@@ -8,7 +8,7 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-from tradingagents.reporting.compact_html_report import get_stock_name
+from tradingagents.reporting.compact_html_report import get_stock_name, _get_code_to_name_map
 
 
 def _results_dir() -> Path:
@@ -43,6 +43,8 @@ def get_history(limit: int = 200) -> list[dict[str, Any]]:
         return []
 
     entries: list[dict[str, Any]] = []
+    c2n: dict[str, str] | None = None  # lazy-loaded name map
+
     for log_file in root.rglob("full_states_log_*.json"):
         match = re.search(r"full_states_log_(\d{4}-\d{2}-\d{2})\.json$", log_file.name)
         if not match:
@@ -50,18 +52,26 @@ def get_history(limit: int = 200) -> list[dict[str, Any]]:
         date_str = match.group(1)
         ticker = log_file.parent.parent.name
 
-        # Try to load elapsed_seconds and analysis_mode from the JSON
+        # Try to load metadata from the JSON
         elapsed_seconds = None
         analysis_mode = None
+        stock_name = None
         try:
             with open(log_file, encoding="utf-8") as f:
                 data = json.load(f)
             elapsed_seconds = data.get("elapsed_seconds")
             analysis_mode = data.get("analysis_mode")
+            stock_name = data.get("stock_name")
         except Exception:
             pass
 
-        name = get_stock_name(ticker) or ""
+        # Use saved stock_name if available; lazy-load map only when needed
+        name = stock_name or ""
+        if not name:
+            if c2n is None:
+                c2n = _get_code_to_name_map()
+            name = c2n.get(ticker, "")
+
         entries.append({
             "ticker": ticker,
             "name": name,

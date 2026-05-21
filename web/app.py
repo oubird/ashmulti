@@ -343,7 +343,11 @@ def _render_history_page() -> None:
     """Render the history analysis list page."""
     st.markdown("### 📜 历史分析")
 
-    history = get_history(limit=200)
+    # Use cached history if available to avoid repeated file scanning
+    if "history_cache" not in st.session_state:
+        st.session_state["history_cache"] = get_history(limit=200)
+    history = st.session_state["history_cache"]
+
     if not history:
         st.info("暂无历史分析记录")
         return
@@ -438,6 +442,8 @@ def _render_new_analysis_page() -> None:
                 )
                 st.session_state["tracker"] = tracker
                 st.session_state["current_page"] = "home"
+                # Clear history cache so the new analysis appears next time
+                st.session_state.pop("history_cache", None)
 
                 depth_map = {"快速": 1, "中等": 3, "深度": 5}
                 config = _build_config(depth=depth_map[depth])
