@@ -27,20 +27,55 @@ def _signal_style(signal: str) -> tuple[str, str]:
     return "#fbbf24", "持有"
 
 
+def _report_table_css() -> str:
+    """Compact table styling shared by embedded HTML and Markdown report content."""
+    return """
+    <style>
+    .report-embed {
+        max-width: 100%;
+        overflow-x: auto;
+    }
+    .report-embed table,
+    div[data-testid="stMarkdownContainer"] table {
+        width: auto !important;
+        max-width: 100% !important;
+        table-layout: auto !important;
+        display: inline-table !important;
+        border-collapse: collapse !important;
+        margin: 0.35rem 0 0.9rem 0 !important;
+        font-size: 0.9rem !important;
+    }
+    .report-embed th,
+    .report-embed td,
+    div[data-testid="stMarkdownContainer"] th,
+    div[data-testid="stMarkdownContainer"] td {
+        padding: 0.3rem 0.55rem !important;
+        line-height: 1.45 !important;
+        white-space: normal !important;
+        overflow-wrap: anywhere !important;
+        word-break: break-word !important;
+        vertical-align: top !important;
+    }
+    .report-embed th,
+    div[data-testid="stMarkdownContainer"] th {
+        white-space: nowrap !important;
+    }
+    </style>
+    """
+
+
+def _inject_report_table_css() -> None:
+    """Inject compact table CSS for Markdown-rendered report sections."""
+    st.markdown(_report_table_css(), unsafe_allow_html=True)
+
+
 def _clean_html_for_embed(html: str) -> str:
     """Remove full-document tags so the HTML can be embedded inline."""
     html = re.sub(r"<!DOCTYPE[^>]*>", "", html, flags=re.IGNORECASE)
     html = re.sub(r"</?html[^>]*>", "", html, flags=re.IGNORECASE)
     html = re.sub(r"</?head[^>]*>", "", html, flags=re.IGNORECASE)
     html = re.sub(r"</?body[^>]*>", "", html, flags=re.IGNORECASE)
-    # Inject compact table CSS to override LLM-generated sparse styles
-    compact_css = """
-    <style>
-    table { width: 100% !important; table-layout: auto !important; }
-    th, td { padding: 0.4rem 0.6rem !important; font-size: 0.9rem !important; white-space: normal !important; }
-    </style>
-    """
-    return html.strip() + compact_css
+    return f'<div class="report-embed">{html.strip()}</div>{_report_table_css()}'
 
 
 _ANALYST_SECTIONS = [
@@ -99,6 +134,8 @@ def render_report(
 
     html_exists, html_bytes, html_filename = _resolve_html_report(ticker, trade_date)
     zip_bytes = _build_analyst_reports_zip(final_state)
+
+    _inject_report_table_css()
 
     header_cols = st.columns([3, 1, 1])
     with header_cols[0]:
