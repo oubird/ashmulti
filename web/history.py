@@ -50,12 +50,14 @@ def get_history(limit: int = 200) -> list[dict[str, Any]]:
         date_str = match.group(1)
         ticker = log_file.parent.parent.name
 
-        # Try to load elapsed_seconds from the JSON
+        # Try to load elapsed_seconds and analysis_mode from the JSON
         elapsed_seconds = None
+        analysis_mode = None
         try:
             with open(log_file, encoding="utf-8") as f:
                 data = json.load(f)
             elapsed_seconds = data.get("elapsed_seconds")
+            analysis_mode = data.get("analysis_mode")
         except Exception:
             pass
 
@@ -66,6 +68,7 @@ def get_history(limit: int = 200) -> list[dict[str, Any]]:
             "date": date_str,
             "elapsed_seconds": elapsed_seconds,
             "elapsed_str": _format_elapsed(elapsed_seconds),
+            "analysis_mode": analysis_mode or "—",
             "path": str(log_file),
         })
 

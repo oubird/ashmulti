@@ -194,7 +194,10 @@ def _run(
     signal = graph.process_signal(last_chunk.get("final_trade_decision", ""))
 
     graph.ticker = ticker
-    graph._log_state(trade_date, last_chunk, elapsed_seconds=tracker.elapsed)
+    depth = config.get("max_debate_rounds", 5)
+    mode_map = {1: "快速", 3: "中等", 5: "深度"}
+    analysis_mode = mode_map.get(depth, "深度")
+    graph._log_state(trade_date, last_chunk, elapsed_seconds=tracker.elapsed, analysis_mode=analysis_mode)
 
     # Generate compact HTML report (post-processing, failures are non-fatal)
     try:

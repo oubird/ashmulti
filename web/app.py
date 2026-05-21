@@ -38,7 +38,7 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&display=swap');
 
     /* Hide Streamlit chrome */
     #MainMenu, header[data-testid="stHeader"],
@@ -49,7 +49,7 @@ st.markdown(
     button[data-testid="collapsedControl"] { display: none !important; }
 
     html, body, [class*="css"] {
-        font-family: 'Inter', -apple-system, sans-serif;
+        font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     }
     .stApp {
         background: #f8f9fa;
@@ -357,14 +357,16 @@ def _render_history_page() -> None:
     )
 
     # Header row
-    hdr_col1, hdr_col2, hdr_col3, hdr_col4 = st.columns([3, 2, 2, 1])
+    hdr_col1, hdr_col2, hdr_col3, hdr_col4, hdr_col5 = st.columns([3, 2, 1.5, 1.5, 1])
     with hdr_col1:
         st.markdown("<span style='color:#374151; font-weight:600; font-size:0.9rem;'>报告名称</span>", unsafe_allow_html=True)
     with hdr_col2:
         st.markdown("<span style='color:#374151; font-weight:600; font-size:0.9rem;'>分析日期</span>", unsafe_allow_html=True)
     with hdr_col3:
-        st.markdown("<span style='color:#374151; font-weight:600; font-size:0.9rem;'>分析耗时</span>", unsafe_allow_html=True)
+        st.markdown("<span style='color:#374151; font-weight:600; font-size:0.9rem;'>分析模式</span>", unsafe_allow_html=True)
     with hdr_col4:
+        st.markdown("<span style='color:#374151; font-weight:600; font-size:0.9rem;'>分析耗时</span>", unsafe_allow_html=True)
+    with hdr_col5:
         st.markdown("<span style='color:#374151; font-weight:600; font-size:0.9rem;'>操作</span>", unsafe_allow_html=True)
 
     st.markdown("<div style='height:0.5rem; background:#f8f9fa; margin:0 -1rem;'></div>", unsafe_allow_html=True)
@@ -374,16 +376,19 @@ def _render_history_page() -> None:
         name = entry["name"]
         date_str = entry["date"]
         elapsed = entry["elapsed_str"]
+        mode = entry.get("analysis_mode", "—")
         display_name = f"{ticker} {name}" if name else ticker
 
-        col1, col2, col3, col4 = st.columns([3, 2, 2, 1])
+        col1, col2, col3, col4, col5 = st.columns([3, 2, 1.5, 1.5, 1])
         with col1:
             st.markdown(f"<span style='color:#1f2937; font-weight:500;'>{display_name}</span>", unsafe_allow_html=True)
         with col2:
             st.markdown(f"<span style='color:#6b7280; font-size:0.9rem;'>{date_str}</span>", unsafe_allow_html=True)
         with col3:
-            st.markdown(f"<span style='color:#6b7280; font-size:0.9rem;'>{elapsed}</span>", unsafe_allow_html=True)
+            st.markdown(f"<span style='color:#6b7280; font-size:0.9rem;'>{mode}</span>", unsafe_allow_html=True)
         with col4:
+            st.markdown(f"<span style='color:#6b7280; font-size:0.9rem;'>{elapsed}</span>", unsafe_allow_html=True)
+        with col5:
             if st.button("查看", key=f"view_{ticker}_{date_str}", type="secondary"):
                 st.session_state["viewing_history"] = entry["path"]
                 st.session_state["current_page"] = "home"
