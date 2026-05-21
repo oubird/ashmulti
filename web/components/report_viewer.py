@@ -69,6 +69,85 @@ def _inject_report_table_css() -> None:
     st.markdown(_report_table_css(), unsafe_allow_html=True)
 
 
+def _copy_guard_html() -> str:
+    """Return hidden HTML/JS that blocks Streamlit's clear-cache hotkey on report pages."""
+    return """
+    <div data-testid="ta-report-copy-guard-root" hidden aria-hidden="true"></div>
+    <script>
+    (function () {
+      const flagName = "__taCopyGuardInstalled";
+      if (window[flagName]) {
+        return;
+      }
+      window[flagName] = true;
+
+      const reportMarkerSelector = '[data-testid="ta-report-copy-guard-root"]';
+      const editableSelector = [
+        "input",
+        "textarea",
+        "select",
+        '[contenteditable=""]',
+        '[contenteditable="true"]',
+        '[contenteditable="plaintext-only"]',
+      ].join(", ");
+
+      const isEditableTarget = (target) => {
+        if (!(target instanceof Element)) {
+          return false;
+        }
+        return Boolean(target.closest(editableSelector));
+      };
+
+      const isReportPageActive = () => Boolean(document.querySelector(reportMarkerSelector));
+      const getSelectionText = () => {
+        const selection = window.getSelection ? window.getSelection() : null;
+        return selection ? String(selection).trim() : "";
+      };
+      const isCopyKey = (event) => {
+        const key = (event.key || "").toLowerCase();
+        return key === "c" || event.code === "KeyC";
+      };
+      const hasCopyIntent = (event) => {
+        const hasModifier = event.ctrlKey || event.metaKey;
+        const hasSelection = getSelectionText().length > 0;
+        return hasModifier || hasSelection;
+      };
+
+      const shouldBlockClearCacheShortcut = (event) => {
+        if (!isReportPageActive()) {
+          return false;
+        }
+        if (!isCopyKey(event) || isEditableTarget(event.target)) {
+          return false;
+        }
+        return hasCopyIntent(event);
+      };
+
+      const handleKeyEvent = (event) => {
+        if (!shouldBlockClearCacheShortcut(event)) {
+          return;
+        }
+        event.stopPropagation();
+        if (event.stopImmediatePropagation) {
+          event.stopImmediatePropagation();
+        }
+        event.cancelBubble = true;
+      };
+
+      window.addEventListener("keydown", handleKeyEvent, true);
+      window.addEventListener("keyup", handleKeyEvent, true);
+      document.addEventListener("keydown", handleKeyEvent, true);
+      document.addEventListener("keyup", handleKeyEvent, true);
+    })();
+    </script>
+    """
+
+
+def _inject_copy_guard() -> None:
+    """Install the copy guard script for report pages."""
+    st.html(_copy_guard_html(), unsafe_allow_javascript=True, width="content")
+
+
 def _clean_html_for_embed(html: str) -> str:
     """Remove full-document tags so the HTML can be embedded inline."""
     html = re.sub(r"<!DOCTYPE[^>]*>", "", html, flags=re.IGNORECASE)
@@ -135,6 +214,7 @@ def render_report(
     html_exists, html_bytes, html_filename = _resolve_html_report(ticker, trade_date)
     zip_bytes = _build_analyst_reports_zip(final_state)
 
+    _inject_copy_guard()
     _inject_report_table_css()
 
     header_cols = st.columns([3, 1, 1])
