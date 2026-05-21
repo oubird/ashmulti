@@ -33,7 +33,14 @@ def _clean_html_for_embed(html: str) -> str:
     html = re.sub(r"</?html[^>]*>", "", html, flags=re.IGNORECASE)
     html = re.sub(r"</?head[^>]*>", "", html, flags=re.IGNORECASE)
     html = re.sub(r"</?body[^>]*>", "", html, flags=re.IGNORECASE)
-    return html.strip()
+    # Inject compact table CSS to override LLM-generated sparse styles
+    compact_css = """
+    <style>
+    table { width: 100% !important; table-layout: auto !important; }
+    th, td { padding: 0.4rem 0.6rem !important; font-size: 0.9rem !important; white-space: normal !important; }
+    </style>
+    """
+    return html.strip() + compact_css
 
 
 _ANALYST_SECTIONS = [
