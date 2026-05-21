@@ -74,7 +74,8 @@ def render_sidebar() -> None:
             type="secondary",
         ):
             from web.runner import request_stop
-            request_stop()
+            from web.task_store import task_key as _tk
+            request_stop(_tk(tracker.ticker, tracker.trade_date))
             st.session_state.pop("tracker", None)
             st.session_state.pop("start_analysis", None)
             st.rerun()

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from tradingagents.reporting.compact_html_report import _get_code_to_name_map, _report_dir, _safe_filename
+from web.auth_store import get_task_keys_for_user
 
 from web.task_store import (
     can_continue,
@@ -272,11 +273,16 @@ def _merge_record_and_log(
     return merged
 
 
-def _load_task_rows(c2n: dict[str, str] | None) -> dict[str, dict[str, Any]]:
+def _load_task_rows(c2n: dict[str, str] | None, user_id: int | None = None) -> dict[str, dict[str, Any]]:
     """Load task records and merge them with any log entries."""
     rows: dict[str, dict[str, Any]] = {}
     deleted_keys: set[str] = set()
-    for record in list_task_records():
+
+    allowed_keys: set[str] | None = None
+    if user_id is not None:
+        allowed_keys = get_task_keys_for_user(user_id)
+
+    for record in list_task_records(user_id=user_id):
         if record.get("status") == "deleted" or record.get("delete_requested"):
             ticker = record.get("ticker", "")
             trade_date = record.get("trade_date", "")
@@ -298,6 +304,8 @@ def _load_task_rows(c2n: dict[str, str] | None) -> dict[str, dict[str, Any]]:
                 continue
             key = task_key(log_entry["ticker"], log_entry["date"])
             if key in deleted_keys:
+                continue
+            if allowed_keys is not None and key not in allowed_keys:
                 continue
             existing = rows.get(key)
             if existing:
@@ -324,6 +332,8 @@ def _load_task_rows(c2n: dict[str, str] | None) -> dict[str, dict[str, Any]]:
                 key = task_key(ticker, trade_date)
                 if key in deleted_keys:
                     continue
+                if allowed_keys is not None and key not in allowed_keys:
+                    continue
                 if key in rows and rows[key].get("source") != "legacy_cli":
                     continue
                 legacy_entry = _parse_legacy_cli_entry(ticker, trade_date, c2n)
@@ -333,7 +343,7 @@ def _load_task_rows(c2n: dict[str, str] | None) -> dict[str, dict[str, Any]]:
     return rows
 
 
-def get_history(limit: int = 200) -> list[dict[str, Any]]:
+def get_history(user_id: int | None = None, limit: int = 200) -> list[dict[str, Any]]:
     """Scan saved analysis logs and return a sorted list (newest first).
 
     Each entry: {
@@ -351,7 +361,7 @@ def get_history(limit: int = 200) -> list[dict[str, Any]]:
     if c2n is None:
         c2n = _get_code_to_name_map()
 
-    entries = list(_load_task_rows(c2n).values())
+    entries = list(_load_task_rows(c2n, user_id=user_id).values())
     entries.sort(key=lambda e: (e.get("sort_ts", 0.0), e.get("date", "")), reverse=True)
 
     # Prune old entries beyond limit

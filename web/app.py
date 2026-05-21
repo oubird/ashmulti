@@ -34,11 +34,26 @@ from web.task_store import (  # noqa: E402
     load_legacy_cli_final_state,
     load_task_record_by_path,
     save_task_record,
+    task_key,
+)
+from web.auth_store import (  # noqa: E402
+    init_auth_db,
+    ensure_default_users,
+    run_legacy_migration,
+    verify_password,
+    create_user,
+    update_user,
+    delete_user,
+    list_users,
+    get_user_by_id,
+    change_password,
+    admin_reset_password,
+    require_auth,
 )
 
 # ── Page config ──────────────────────────────────────────────────────────────
 
-_VERSION = "V1.0.5"
+_VERSION = "V1.0.6"
 
 st.set_page_config(
     page_title="A股多专家投研系统",
@@ -46,6 +61,11 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed",
 )
+
+# ── Initialize auth DB & run legacy migration once ───────────────────────────
+init_auth_db()
+ensure_default_users()
+_migration_result = run_legacy_migration()
 
 # ── Custom CSS ───────────────────────────────────────────────────────────────
 
@@ -191,9 +211,32 @@ st.markdown(
 
 # ── Navigation bar ───────────────────────────────────────────────────────────
 
+def _render_user_menu() -> None:
+    """Render user avatar dropdown in the top-right corner."""
+    user = st.session_state.get("auth_user")
+    if not user:
+        return
+    username = user.get("username", "")
+    role_label = "管理" if user.get("role") == "admin" else "用户"
+    with st.popover(f"👤 {username} ({role_label})", use_container_width=False):
+        if user.get("role") == "user":
+            if st.button("🏠 个人主页", key="menu_profile", use_container_width=True):
+                st.session_state["current_page"] = "profile"
+                st.rerun()
+        if st.button("🔐 修改密码", key="menu_change_pwd", use_container_width=True):
+            st.session_state["current_page"] = "change_password"
+            st.rerun()
+        st.markdown("<hr style='margin:0.5rem 0;'>", unsafe_allow_html=True)
+        if st.button("🚪 退出登录", key="menu_logout", use_container_width=True):
+            st.session_state.pop("auth_user", None)
+            st.session_state.pop("tracker", None)
+            st.session_state["current_page"] = "login"
+            st.rerun()
+
+
 def _render_top_nav() -> None:
     """Render the top orange navigation bar."""
-    cols = st.columns([3, 1, 1, 1, 2])
+    cols = st.columns([3, 1, 1, 1, 1.5])
     with cols[0]:
         st.markdown(
             f'<span class="nav-brand" style="color:white; font-size:1.3rem; font-weight:700;">A股多专家分析系统</span>'
@@ -216,7 +259,7 @@ def _render_top_nav() -> None:
             st.session_state.pop("viewing_history", None)
             st.rerun()
     with cols[4]:
-        st.empty()
+        _render_user_menu()
 
 
 # ── Welcome screen helper ───────────────────────────────────────────────────
@@ -419,6 +462,250 @@ def _load_history_report_state(viewing_history: Any) -> tuple[dict[str, Any], st
     raise FileNotFoundError(f"无法加载历史报告: {viewing_history}")
 
 
+# ── Login page ───────────────────────────────────────────────────────────────
+
+def _render_login() -> None:
+    """Render the login page."""
+    st.markdown(
+        """
+        <div style="max-width: 400px; margin: 4rem auto; padding: 2rem; background: #ffffff;
+                    border: 1px solid #e5e7eb; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.06);">
+            <div style="text-align: center; margin-bottom: 1.5rem;">
+                <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">📈</div>
+                <div style="font-size: 1.4rem; font-weight: 700; color: #1f2937;">A股多专家分析系统</div>
+                <div style="color: #9ca3af; font-size: 0.85rem;">请登录后继续</div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # Use a form so inputs are grouped
+    with st.form("login_form", clear_on_submit=False):
+        username = st.text_input("用户名", placeholder="admin 或 xuliang")
+        password = st.text_input("密码", type="password", placeholder="初始密码: Admin@123!")
+        submitted = st.form_submit_button("登录", use_container_width=True, type="primary")
+
+    if submitted:
+        if not username or not password:
+            st.error("请输入用户名和密码")
+            return
+        user = verify_password(username.strip(), password)
+        if user is None:
+            st.error("用户名或密码错误，或账号已禁用")
+            return
+        st.session_state["auth_user"] = user
+        if user.get("must_change_password"):
+            st.session_state["current_page"] = "force_change_password"
+        elif user.get("role") == "admin":
+            st.session_state["current_page"] = "admin"
+        else:
+            st.session_state["current_page"] = "home"
+        st.rerun()
+
+
+# ── Force change password page ───────────────────────────────────────────────
+
+def _render_force_change_password() -> None:
+    """Force password change on first login or after admin reset."""
+    user = st.session_state.get("auth_user")
+    if not user:
+        st.session_state["current_page"] = "login"
+        st.rerun()
+        return
+
+    st.markdown(
+        """
+        <div style="max-width: 400px; margin: 4rem auto; padding: 2rem; background: #ffffff;
+                    border: 1px solid #e5e7eb; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.06);">
+            <div style="text-align: center; margin-bottom: 1.5rem;">
+                <div style="font-size: 2rem; margin-bottom: 0.5rem;">🔐</div>
+                <div style="font-size: 1.2rem; font-weight: 700; color: #1f2937;">首次登录，请修改密码</div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    with st.form("force_change_password_form"):
+        old_pwd = st.text_input("旧密码", type="password")
+        new_pwd = st.text_input("新密码", type="password")
+        confirm_pwd = st.text_input("确认新密码", type="password")
+        submitted = st.form_submit_button("确认修改", use_container_width=True, type="primary")
+
+    if submitted:
+        if not old_pwd or not new_pwd or not confirm_pwd:
+            st.error("请填写所有密码字段")
+            return
+        if new_pwd != confirm_pwd:
+            st.error("两次输入的新密码不一致")
+            return
+        try:
+            change_password(user["id"], old_pwd, new_pwd)
+            st.success("密码修改成功，请重新登录")
+            st.session_state.pop("auth_user", None)
+            st.session_state["current_page"] = "login"
+            st.rerun()
+        except ValueError as e:
+            st.error(f"修改失败: {e}")
+
+
+# ── Admin page ───────────────────────────────────────────────────────────────
+
+def _render_admin_page() -> None:
+    """Admin-only user management page."""
+    user = st.session_state.get("auth_user")
+    if not user or user.get("role") != "admin":
+        st.error("无权访问管理页面")
+        st.session_state["current_page"] = "login"
+        st.rerun()
+        return
+
+    st.markdown("### 👤 用户管理")
+
+    # New user section
+    with st.expander("➕ 新建用户"):
+        with st.form("create_user_form"):
+            new_username = st.text_input("用户名")
+            new_role = st.selectbox("角色", options=["user", "admin"], index=0)
+            new_password = st.text_input("初始密码", type="password")
+            submitted = st.form_submit_button("创建用户", use_container_width=True, type="primary")
+        if submitted:
+            if not new_username or not new_password:
+                st.error("用户名和密码不能为空")
+            else:
+                try:
+                    create_user(new_username.strip(), new_password, new_role, user["id"])
+                    st.success(f"用户 {new_username} 创建成功")
+                    st.rerun()
+                except ValueError as e:
+                    st.error(f"创建失败: {e}")
+
+    # User list
+    all_users = list_users()
+    if not all_users:
+        st.info("暂无用户")
+        return
+
+    st.markdown("<div style='height:1rem;'></div>", unsafe_allow_html=True)
+    for u in all_users:
+        c1, c2, c3, c4, c5, c6 = st.columns([2, 1, 1, 1.5, 1.5, 2])
+        with c1:
+            st.markdown(f"<span style='font-weight:600;'>{u['username']}</span>", unsafe_allow_html=True)
+        with c2:
+            badge = "🔴 管理" if u["role"] == "admin" else "🔵 用户"
+            st.markdown(badge)
+        with c3:
+            st.markdown("✅ 启用" if u["enabled"] else "❌ 禁用")
+        with c4:
+            st.markdown("🔐 需改密" if u["must_change_password"] else "—")
+        with c5:
+            st.caption(u.get("created_at", "")[:10])
+        with c6:
+            a1, a2, a3 = st.columns(3)
+            with a1:
+                if st.button("重置密码", key=f"reset_{u['id']}", use_container_width=True):
+                    st.session_state[f"show_reset_{u['id']}"] = True
+            with a2:
+                disabled = u["id"] == user["id"]
+                if st.button(
+                    "禁用" if u["enabled"] else "启用",
+                    key=f"toggle_{u['id']}",
+                    use_container_width=True,
+                    disabled=disabled and u["enabled"],
+                ):
+                    try:
+                        update_user(u["id"], enabled=0 if u["enabled"] else 1)
+                        st.rerun()
+                    except ValueError as e:
+                        st.error(str(e))
+            with a3:
+                disabled = u["id"] == user["id"]
+                if st.button("删除", key=f"del_{u['id']}", use_container_width=True, disabled=disabled):
+                    try:
+                        delete_user(u["id"], user["id"])
+                        st.success(f"已删除 {u['username']}")
+                        st.rerun()
+                    except ValueError as e:
+                        st.error(str(e))
+
+        # Reset password inline
+        if st.session_state.get(f"show_reset_{u['id']}"):
+            with st.form(f"reset_form_{u['id']}"):
+                reset_pwd = st.text_input("新密码", type="password")
+                col_a, col_b = st.columns(2)
+                with col_a:
+                    if st.form_submit_button("确认重置", use_container_width=True, type="primary"):
+                        if reset_pwd:
+                            try:
+                                admin_reset_password(u["id"], reset_pwd)
+                                st.success("密码已重置，用户下次登录需修改密码")
+                                st.session_state.pop(f"show_reset_{u['id']}", None)
+                                st.rerun()
+                            except ValueError as e:
+                                st.error(str(e))
+                        else:
+                            st.error("请输入新密码")
+                with col_b:
+                    if st.form_submit_button("取消", use_container_width=True):
+                        st.session_state.pop(f"show_reset_{u['id']}", None)
+                        st.rerun()
+
+        st.markdown("<div style='height:1px; background:#f3f4f6; margin:0.5rem 0;'></div>", unsafe_allow_html=True)
+
+
+# ── Change password page (self-service) ──────────────────────────────────────
+
+def _render_change_password() -> None:
+    """Self-service password change for normal users."""
+    user = st.session_state.get("auth_user")
+    if not user:
+        st.session_state["current_page"] = "login"
+        st.rerun()
+        return
+
+    st.markdown("### 🔐 修改密码")
+    with st.form("change_password_form"):
+        old_pwd = st.text_input("旧密码", type="password")
+        new_pwd = st.text_input("新密码", type="password")
+        confirm_pwd = st.text_input("确认新密码", type="password")
+        submitted = st.form_submit_button("确认修改", use_container_width=True, type="primary")
+
+    if submitted:
+        if not old_pwd or not new_pwd or not confirm_pwd:
+            st.error("请填写所有字段")
+            return
+        if new_pwd != confirm_pwd:
+            st.error("两次输入的新密码不一致")
+            return
+        try:
+            change_password(user["id"], old_pwd, new_pwd)
+            st.success("密码修改成功")
+            if user.get("role") == "admin":
+                st.session_state["current_page"] = "admin"
+            else:
+                st.session_state["current_page"] = "home"
+            st.rerun()
+        except ValueError as e:
+            st.error(f"修改失败: {e}")
+
+
+# ── Profile page ─────────────────────────────────────────────────────────────
+
+def _render_profile() -> None:
+    """Simple profile page for normal users."""
+    user = st.session_state.get("auth_user")
+    if not user:
+        st.session_state["current_page"] = "login"
+        st.rerun()
+        return
+
+    st.markdown("### 🏠 个人主页")
+    st.markdown(f"**用户名**: {user.get('username', '')}")
+    st.markdown(f"**角色**: {'管理员' if user.get('role') == 'admin' else '普通用户'}")
+    st.markdown(f"**状态**: {'启用' if user.get('enabled') else '禁用'}")
+
+
 # ── Home page ────────────────────────────────────────────────────────────────
 
 def _render_home() -> None:
@@ -449,7 +736,8 @@ def _render_home() -> None:
         render_progress(tracker)
 
         if st.button("⏹ 停止分析", use_container_width=True, type="secondary"):
-            request_stop()
+            tk = task_key(tracker.ticker, tracker.trade_date)
+            request_stop(tk)
             st.session_state.pop("tracker", None)
             st.session_state.pop("start_analysis", None)
             st.session_state["suppress_tracker_reconnect"] = True
@@ -489,12 +777,20 @@ def _render_home() -> None:
 
 def _render_history_page() -> None:
     """Render the history analysis list page."""
+    user = st.session_state.get("auth_user")
+    if not user:
+        st.error("请先登录")
+        st.session_state["current_page"] = "login"
+        st.rerun()
+        return
+
     st.markdown("### 📜 历史分析")
 
     # Use cached history if available to avoid repeated file scanning
-    if "history_cache" not in st.session_state:
-        st.session_state["history_cache"] = get_history(limit=200)
-    history = st.session_state["history_cache"]
+    cache_key = f"history_cache_{user['id']}"
+    if cache_key not in st.session_state:
+        st.session_state[cache_key] = get_history(user_id=user["id"], limit=200)
+    history = st.session_state[cache_key]
 
     if not history:
         st.info("暂无历史分析记录")
@@ -583,6 +879,13 @@ def _render_history_page() -> None:
 
 def _render_new_analysis_page() -> None:
     """Render the new analysis page with ticker input and depth selector."""
+    user = st.session_state.get("auth_user")
+    if not user:
+        st.error("请先登录")
+        st.session_state["current_page"] = "login"
+        st.rerun()
+        return
+
     st.markdown("### ➕ 新建分析")
 
     ticker = st.text_input(
@@ -617,6 +920,7 @@ def _render_new_analysis_page() -> None:
                     "trade_date": trade_date,
                     "config": _build_config(depth=depth_map[depth]),
                     "selected_analysts": _SELECTED_ANALYSTS,
+                    "user_id": str(user["id"]),
                 }
                 _launch_analysis_request(request)
                 st.rerun()
@@ -658,6 +962,7 @@ def _launch_analysis_request(request: dict[str, Any]) -> None:
     selected_analysts = request.get("selected_analysts") or _SELECTED_ANALYSTS
     task_record = request.get("task_record")
     repair_only = bool(request.get("repair_only"))
+    user_id = str(request.get("user_id", ""))
 
     tracker = ProgressTracker(
         ticker=ticker,
@@ -675,7 +980,10 @@ def _launch_analysis_request(request: dict[str, Any]) -> None:
     st.session_state.pop("suppress_tracker_reconnect", None)
     st.session_state.pop("viewing_task", None)
     st.session_state.pop("viewing_history", None)
-    st.session_state.pop("history_cache", None)
+    # Clear per-user history cache
+    user = st.session_state.get("auth_user")
+    if user:
+        st.session_state.pop(f"history_cache_{user['id']}", None)
 
     run_analysis_in_thread(
         ticker=ticker,
@@ -685,6 +993,7 @@ def _launch_analysis_request(request: dict[str, Any]) -> None:
         selected_analysts=selected_analysts,
         task_record=task_record,
         repair_only=repair_only,
+        user_id=user_id,
     )
 
 
@@ -693,6 +1002,9 @@ def _queue_history_continue(entry: dict[str, Any]) -> None:
     mode = entry.get("continue_mode", "none")
     if mode == "none":
         return
+
+    user = st.session_state.get("auth_user")
+    user_id = str(user["id"]) if user else ""
 
     task_record = None
     config = _build_config()
@@ -733,21 +1045,36 @@ def _queue_history_continue(entry: dict[str, Any]) -> None:
         "selected_analysts": selected_analysts,
         "task_record": task_record,
         "repair_only": mode == "repair",
+        "user_id": user_id,
     }
     st.session_state["start_analysis"] = request
     st.session_state.pop("viewing_task", None)
     st.session_state.pop("viewing_history", None)
-    st.session_state.pop("history_cache", None)
+    if user:
+        st.session_state.pop(f"history_cache_{user['id']}", None)
     st.session_state["current_page"] = "home"
     st.rerun()
 
 
 def _delete_history_entry(entry: dict[str, Any]) -> None:
     """Delete the task represented by a history row."""
+    user = st.session_state.get("auth_user")
+    caller_id = user["id"] if user else None
+
     task_path = entry.get("task_path") or ""
     task_record = load_task_record_by_path(task_path) if task_path else None
 
-    active = get_active_tracker()
+    # Ownership check
+    if caller_id is not None:
+        tk = task_key(entry["ticker"], entry["date"])
+        from web.auth_store import get_task_owner
+        owner = get_task_owner(tk)
+        if owner is not None and owner != caller_id and user.get("role") != "admin":
+            st.error("无权删除他人任务")
+            return
+
+    tk = task_key(entry["ticker"], entry["date"])
+    active = get_active_tracker(task_key=tk, user_id=str(user["id"]) if user else "")
     is_active_task = bool(
         active
         and active.is_running
@@ -764,7 +1091,7 @@ def _delete_history_entry(entry: dict[str, Any]) -> None:
             record["config"] = _build_config()
         record["delete_requested"] = True
         save_task_record(record)
-        request_stop()
+        request_stop(tk)
         st.session_state.pop("tracker", None)
         st.session_state["suppress_tracker_reconnect"] = True
     else:
@@ -774,11 +1101,16 @@ def _delete_history_entry(entry: dict[str, Any]) -> None:
         record.setdefault("task_path", entry.get("task_path") or "")
         if not record.get("config"):
             record["config"] = _build_config()
-        delete_task_artifacts(record)
+        try:
+            delete_task_artifacts(record, caller_user_id=caller_id)
+        except PermissionError as e:
+            st.error(str(e))
+            return
 
     st.session_state.pop("viewing_task", None)
     st.session_state.pop("viewing_history", None)
-    st.session_state.pop("history_cache", None)
+    if user:
+        st.session_state.pop(f"history_cache_{user['id']}", None)
     st.rerun()
 
 
@@ -793,7 +1125,8 @@ if start_req:
 
 if "tracker" not in st.session_state:
     if not st.session_state.get("suppress_tracker_reconnect"):
-        _active = get_active_tracker()
+        user = st.session_state.get("auth_user")
+        _active = get_active_tracker(user_id=str(user["id"]) if user else "")
         if _active and (_active.is_running or _active.is_complete or _active.error):
             st.session_state["tracker"] = _active
 
@@ -801,15 +1134,52 @@ if "tracker" not in st.session_state:
 # ── Initialize page routing ──────────────────────────────────────────────────
 
 if "current_page" not in st.session_state:
-    st.session_state["current_page"] = "home"
+    st.session_state["current_page"] = "login"
+
+
+# ── Route guard ──────────────────────────────────────────────────────────────
+
+user = st.session_state.get("auth_user")
+current_page = st.session_state.get("current_page", "login")
+
+# Not logged in → force login
+if not user:
+    current_page = "login"
+    st.session_state["current_page"] = "login"
+else:
+    # Force password change
+    if user.get("must_change_password") and current_page != "force_change_password":
+        current_page = "force_change_password"
+        st.session_state["current_page"] = "force_change_password"
+    # Admin route guard
+    elif user.get("role") == "admin":
+        if current_page not in ("admin", "change_password", "force_change_password", "login"):
+            current_page = "admin"
+            st.session_state["current_page"] = "admin"
+    # Normal user route guard
+    elif user.get("role") == "user":
+        if current_page in ("admin",):
+            current_page = "home"
+            st.session_state["current_page"] = "home"
 
 
 # ── Render top nav + page content ────────────────────────────────────────────
 
-_render_top_nav()
+if current_page != "login":
+    _render_top_nav()
 
-current_page = st.session_state.get("current_page", "home")
-if current_page == "home":
+current_page = st.session_state.get("current_page", "login")
+if current_page == "login":
+    _render_login()
+elif current_page == "force_change_password":
+    _render_force_change_password()
+elif current_page == "admin":
+    _render_admin_page()
+elif current_page == "profile":
+    _render_profile()
+elif current_page == "change_password":
+    _render_change_password()
+elif current_page == "home":
     _render_home()
 elif current_page == "history":
     _render_history_page()

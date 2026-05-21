@@ -48,20 +48,34 @@ _ANALYST_REPORT_KEYS = [
     "lockup_report",
 ]
 
-# Global references so the UI can reconnect after a page refresh
-_GLOBAL_TRACKER: ProgressTracker | None = None
-_GLOBAL_THREAD: threading.Thread | None = None
-_STOP_EVENT = threading.Event()
+# Per-task registry so multiple users can run concurrently.
+# task_key -> {"tracker": ProgressTracker, "thread": Thread, "stop_event": Event, "user_id": str}
+_RUN_REGISTRY: dict[str, dict] = {}
+_REGISTRY_LOCK = threading.Lock()
 
 
-def get_active_tracker() -> ProgressTracker | None:
-    """Return the globally stored tracker if a run is still active."""
-    return _GLOBAL_TRACKER
+def _task_key(ticker: str, trade_date: str) -> str:
+    from web.task_store import task_key as _tk
+    return _tk(ticker, trade_date)
 
 
-def request_stop() -> None:
+def get_active_tracker(task_key: str | None = None, user_id: str = "") -> ProgressTracker | None:
+    """Return a tracker by task_key, or the first running tracker for a user."""
+    with _REGISTRY_LOCK:
+        if task_key and task_key in _RUN_REGISTRY:
+            return _RUN_REGISTRY[task_key]["tracker"]
+        if user_id:
+            for ctx in _RUN_REGISTRY.values():
+                if ctx.get("user_id") == user_id:
+                    return ctx["tracker"]
+        return None
+
+
+def request_stop(task_key: str | None = None) -> None:
     """Signal the background runner to stop at the next chunk boundary."""
-    _STOP_EVENT.set()
+    with _REGISTRY_LOCK:
+        if task_key and task_key in _RUN_REGISTRY:
+            _RUN_REGISTRY[task_key]["stop_event"].set()
 
 
 def _strip_think_tags(text: str) -> str:
@@ -340,6 +354,8 @@ def _run(
     selected_analysts: list[str],
     task_record: dict[str, Any] | None = None,
     repair_only: bool = False,
+    stop_event: threading.Event | None = None,
+    user_id: str = "",
 ) -> None:
     """Execute the full pipeline in the current thread."""
     from cli.stats_handler import StatsCallbackHandler
@@ -375,12 +391,18 @@ def _run(
             selected_analysts=effective_analysts,
         )
     elif task_record_state is None and not repair_only:
+        owner_id = 0
+        try:
+            owner_id = int(user_id) if user_id else 0
+        except Exception:
+            pass
         task_record_state = create_task_record(
             ticker,
             trade_date,
             runtime_config,
             effective_analysts,
             stock_name=get_stock_name(ticker),
+            owner_user_id=owner_id,
         )
         task_record_state = _persist_task_record(
             task_record_state,
@@ -429,6 +451,7 @@ def _run(
     )
     stock_name = (task_record_state or {}).get("stock_name") or get_stock_name(ticker)
 
+    _stop_ev = stop_event if stop_event is not None else threading.Event()
     try:
         if repair_only:
             final_state, log_path = _load_final_state_for_repair(
@@ -437,7 +460,7 @@ def _run(
                 task_record_state,
                 runtime_config,
             )
-            if _STOP_EVENT.is_set():
+            if _stop_ev.is_set():
                 raise InterruptedError("用户已取消")
             signal = graph.process_signal(final_state.get("final_trade_decision", ""))
             compact_path, risk_path, postprocess_error = _generate_reports(
@@ -445,7 +468,7 @@ def _run(
                 final_state,
                 ticker,
                 trade_date,
-                stop_event=_STOP_EVENT,
+                stop_event=_stop_ev,
             )
             report_complete = bool(compact_path and risk_path)
             if task_record_state is not None:
@@ -493,7 +516,7 @@ def _run(
 
         for chunk in graph.graph.stream(init_state, **args):
             task_record_state = _refresh_task_record(task_record_state)
-            if _STOP_EVENT.is_set():
+            if _stop_ev.is_set():
                 if task_record_state and task_record_state.get("delete_requested"):
                     delete_task_artifacts(task_record_state)
                     tracker.mark_error("任务已删除")
@@ -592,7 +615,7 @@ def _run(
             final_state,
             ticker,
             trade_date,
-            stop_event=_STOP_EVENT,
+            stop_event=_stop_ev,
         )
         report_complete = bool(compact_path and risk_path)
 
@@ -643,6 +666,8 @@ def _run(
     finally:
         if checkpoint_ctx is not None:
             checkpoint_ctx.__exit__(None, None, None)
+        with _REGISTRY_LOCK:
+            _RUN_REGISTRY.pop(_task_key(ticker, trade_date), None)
 
 
 def run_analysis_in_thread(
@@ -653,11 +678,11 @@ def run_analysis_in_thread(
     selected_analysts: list[str],
     task_record: dict[str, Any] | None = None,
     repair_only: bool = False,
+    user_id: str = "",
 ) -> threading.Thread:
     """Launch the pipeline in a daemon thread. Returns the thread handle."""
-    global _GLOBAL_TRACKER, _GLOBAL_THREAD
-
-    _STOP_EVENT.clear()
+    tk = _task_key(ticker, trade_date)
+    stop_event = threading.Event()
     tracker.ticker = ticker
     tracker.trade_date = trade_date
     tracker.is_running = True
@@ -669,10 +694,15 @@ def run_analysis_in_thread(
     else:
         tracker.mark_stage_active("market")
 
-    _GLOBAL_TRACKER = tracker
+    with _REGISTRY_LOCK:
+        _RUN_REGISTRY[tk] = {
+            "tracker": tracker,
+            "thread": None,
+            "stop_event": stop_event,
+            "user_id": user_id,
+        }
 
     def _target() -> None:
-        global _GLOBAL_TRACKER, _GLOBAL_THREAD
         try:
             _run(
                 ticker,
@@ -682,14 +712,18 @@ def run_analysis_in_thread(
                 selected_analysts,
                 task_record=task_record,
                 repair_only=repair_only,
+                stop_event=stop_event,
+                user_id=user_id,
             )
         except Exception as exc:
             tracker.mark_error(str(exc))
         finally:
-            _GLOBAL_TRACKER = None
-            _GLOBAL_THREAD = None
+            with _REGISTRY_LOCK:
+                _RUN_REGISTRY.pop(tk, None)
 
     t = threading.Thread(target=_target, daemon=True)
     t.start()
-    _GLOBAL_THREAD = t
+    with _REGISTRY_LOCK:
+        if tk in _RUN_REGISTRY:
+            _RUN_REGISTRY[tk]["thread"] = t
     return t

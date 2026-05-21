@@ -14,6 +14,13 @@ from tradingagents.default_config import DEFAULT_CONFIG
 from tradingagents.graph.checkpointer import clear_checkpoint
 from tradingagents.reporting.compact_html_report import _report_dir, _safe_filename, get_stock_name
 
+from web.auth_store import (
+    delete_task_index,
+    get_task_keys_for_user,
+    get_task_owner,
+    upsert_task_index,
+)
+
 
 _TASKS_SUBDIR = "web_tasks"
 
@@ -206,6 +213,17 @@ def save_task_record(record: dict[str, Any]) -> Path:
     payload["task_path"] = str(path)
     payload["updated_at"] = now_iso()
     _atomic_write(path, json.dumps(payload, ensure_ascii=False, indent=2, default=str))
+    # Sync owner to SQLite task_index
+    owner = payload.get("owner_user_id")
+    if owner is not None:
+        upsert_task_index(
+            payload["task_key"],
+            int(owner),
+            ticker,
+            trade_date,
+            str(path),
+            payload.get("status", ""),
+        )
     return path
 
 
@@ -231,17 +249,26 @@ def load_task_record(ticker: str, trade_date: str) -> dict[str, Any] | None:
     return load_task_record_by_path(task_path(ticker, trade_date))
 
 
-def list_task_records() -> list[dict[str, Any]]:
-    """Return all persisted task records."""
+def list_task_records(user_id: int | None = None) -> list[dict[str, Any]]:
+    """Return persisted task records, optionally filtered by owner user_id."""
     root = tasks_root()
     if not root.exists():
         return []
 
+    allowed_keys: set[str] | None = None
+    if user_id is not None:
+        allowed_keys = get_task_keys_for_user(user_id)
+
     records: list[dict[str, Any]] = []
     for path in root.rglob("*.json"):
         record = load_task_record_by_path(path)
-        if record:
-            records.append(record)
+        if not record:
+            continue
+        if allowed_keys is not None:
+            tk = record.get("task_key") or task_key(record.get("ticker", ""), record.get("trade_date", ""))
+            if tk not in allowed_keys:
+                continue
+        records.append(record)
     return records
 
 
@@ -273,11 +300,21 @@ def _candidate_report_paths(record: dict[str, Any]) -> Iterable[Path]:
     yield from report_dir.glob(f"{ticker}_*_risk_{trade_date}.html")
 
 
-def delete_task_artifacts(record: dict[str, Any]) -> None:
-    """Delete the task record and all generated artifacts for one task."""
+def delete_task_artifacts(record: dict[str, Any], caller_user_id: int | None = None) -> None:
+    """Delete the task record and all generated artifacts for one task.
+
+    If caller_user_id is provided, only the owner or an admin may delete.
+    """
     ticker = record["ticker"]
     trade_date = record["trade_date"]
     config = record.get("config") if isinstance(record.get("config"), dict) else {}
+
+    # Ownership check
+    if caller_user_id is not None:
+        tk = task_key(ticker, trade_date)
+        owner = get_task_owner(tk)
+        if owner is not None and owner != caller_user_id:
+            raise PermissionError("无权删除他人任务")
 
     # Remove resumable checkpoint data first so a deleted row cannot be resumed.
     try:
@@ -329,6 +366,12 @@ def delete_task_artifacts(record: dict[str, Any]) -> None:
         if path.exists():
             path.unlink()
             _prune_empty_parents(path, tasks_root())
+    except Exception:
+        pass
+
+    # Remove from task_index
+    try:
+        delete_task_index(task_key(ticker, trade_date))
     except Exception:
         pass
 
@@ -389,6 +432,7 @@ def create_task_record(
     selected_analysts: list[str],
     *,
     stock_name: str = "",
+    owner_user_id: int = 0,
 ) -> dict[str, Any]:
     """Build a fresh task record ready to persist."""
     cfg = _jsonable(config)
@@ -420,6 +464,7 @@ def create_task_record(
         "elapsed_seconds": 0.0,
         "started_at": now_iso(),
         "updated_at": now_iso(),
+        "owner_user_id": owner_user_id,
     }
 
 
