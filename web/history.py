@@ -4,34 +4,98 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 from pathlib import Path
 from typing import Any
+
+from tradingagents.reporting.compact_html_report import get_stock_name
 
 
 def _results_dir() -> Path:
     return Path.home() / ".tradingagents" / "logs"
 
 
-def get_history() -> list[dict[str, str]]:
+def _format_elapsed(seconds: float | None) -> str:
+    """Format elapsed seconds into human-readable string."""
+    if seconds is None or seconds <= 0:
+        return "—"
+    m, s = divmod(int(seconds), 60)
+    if m > 0:
+        return f"{m}分{s:02d}秒"
+    return f"{s}秒"
+
+
+def get_history(limit: int = 200) -> list[dict[str, Any]]:
     """Scan saved analysis logs and return a sorted list (newest first).
 
-    Each entry: {"ticker": "300750", "date": "2026-05-12", "path": "/abs/path/...json"}
+    Each entry: {
+        "ticker": "300750",
+        "name": "宁德时代",
+        "date": "2026-05-12",
+        "elapsed_seconds": 125.3,
+        "elapsed_str": "2分05秒",
+        "path": "/abs/path/...json"
+    }
+    Only the most recent *limit* entries are returned; older files are pruned.
     """
     root = _results_dir()
     if not root.exists():
         return []
 
-    entries: list[dict[str, str]] = []
+    entries: list[dict[str, Any]] = []
     for log_file in root.rglob("full_states_log_*.json"):
         match = re.search(r"full_states_log_(\d{4}-\d{2}-\d{2})\.json$", log_file.name)
         if not match:
             continue
-        date = match.group(1)
+        date_str = match.group(1)
         ticker = log_file.parent.parent.name
-        entries.append({"ticker": ticker, "date": date, "path": str(log_file)})
 
+        # Try to load elapsed_seconds from the JSON
+        elapsed_seconds = None
+        try:
+            with open(log_file, encoding="utf-8") as f:
+                data = json.load(f)
+            elapsed_seconds = data.get("elapsed_seconds")
+        except Exception:
+            pass
+
+        name = get_stock_name(ticker) or ""
+        entries.append({
+            "ticker": ticker,
+            "name": name,
+            "date": date_str,
+            "elapsed_seconds": elapsed_seconds,
+            "elapsed_str": _format_elapsed(elapsed_seconds),
+            "path": str(log_file),
+        })
+
+    # Sort newest first
     entries.sort(key=lambda e: e["date"], reverse=True)
+
+    # Prune old entries beyond limit
+    if len(entries) > limit:
+        _prune_entries(entries[limit:])
+        entries = entries[:limit]
+
     return entries
+
+
+def _prune_entries(old_entries: list[dict[str, Any]]) -> None:
+    """Delete log files and their parent directories for pruned entries."""
+    for entry in old_entries:
+        try:
+            path = Path(entry["path"])
+            if path.exists():
+                path.unlink()
+            # Remove empty parent directories (ticker/TradingAgentsStrategy_logs)
+            parent = path.parent  # TradingAgentsStrategy_logs
+            if parent.exists() and not any(parent.iterdir()):
+                parent.rmdir()
+            grandparent = parent.parent  # ticker dir
+            if grandparent.exists() and not any(grandparent.iterdir()):
+                grandparent.rmdir()
+        except Exception:
+            pass
 
 
 def load_analysis(path: str) -> dict[str, Any]:

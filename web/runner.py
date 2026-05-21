@@ -194,7 +194,7 @@ def _run(
     signal = graph.process_signal(last_chunk.get("final_trade_decision", ""))
 
     graph.ticker = ticker
-    graph._log_state(trade_date, last_chunk)
+    graph._log_state(trade_date, last_chunk, elapsed_seconds=tracker.elapsed)
 
     # Generate compact HTML report (post-processing, failures are non-fatal)
     try:
