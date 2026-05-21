@@ -125,6 +125,22 @@ st.markdown(
         color: #1f2937 !important;
     }
 
+    /* ── Sticky report header bar ──────────────────────────────────────── */
+    div[data-testid="stHorizontalBlock"]:has(.sticky-header-marker) {
+        position: sticky !important;
+        top: 0 !important;
+        z-index: 99 !important;
+        background: #f8f9fa !important;
+        padding: 0.8rem 1.5rem !important;
+        margin: -1rem -1rem 1rem -1rem !important;
+        border-bottom: 1px solid #e5e7eb !important;
+        border-radius: 0 !important;
+    }
+    /* Embedded report: no iframe border feel */
+    .embedded-report {
+        border: none !important;
+    }
+
     /* ── Top navigation bar ────────────────────────────────────────────── */
     div[data-testid="stHorizontalBlock"]:has(.nav-brand) {
         background: #ff5a1f !important;

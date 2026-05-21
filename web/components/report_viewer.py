@@ -27,6 +27,15 @@ def _signal_style(signal: str) -> tuple[str, str]:
     return "#fbbf24", "持有"
 
 
+def _clean_html_for_embed(html: str) -> str:
+    """Remove full-document tags so the HTML can be embedded inline."""
+    html = re.sub(r"<!DOCTYPE[^>]*>", "", html, flags=re.IGNORECASE)
+    html = re.sub(r"</?html[^>]*>", "", html, flags=re.IGNORECASE)
+    html = re.sub(r"</?head[^>]*>", "", html, flags=re.IGNORECASE)
+    html = re.sub(r"</?body[^>]*>", "", html, flags=re.IGNORECASE)
+    return html.strip()
+
+
 _ANALYST_SECTIONS = [
     ("market_report", "📊 技术分析"),
     ("sentiment_report", "💬 市场情绪"),
@@ -71,7 +80,7 @@ def render_report(
     color, cn_signal = _signal_style(signal)
     stock_name = get_stock_name(ticker) or ""
 
-    # ── Header: investment summary ──────────────────────────────────────────
+    # ── Sticky header bar: title + download buttons ────────────────────────
     elapsed_str = ""
     if elapsed is not None:
         m, s = divmod(int(elapsed), 60)
@@ -81,32 +90,16 @@ def render_report(
     if elapsed_str:
         header_line += f"  {elapsed_str}"
 
-    st.markdown(
-        f"""
-        <div style="background:#ffffff; border:1px solid #e5e7eb; border-radius:12px; padding:1.2rem 1.5rem; margin:1rem 0 1.5rem;">
-            <div style="font-size:1.05rem; font-weight:700; color:#1f2937;">
-                {header_line}
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    # ── Compact HTML summary report ────────────────────────────────────────
     html_exists, html_bytes, html_filename = _resolve_html_report(ticker, trade_date)
-    if html_exists:
-        st.components.v1.html(html_bytes.decode("utf-8"), height=900, scrolling=True)
-    else:
-        st.info("总结报告尚未生成")
-
-    st.markdown("---")
-    st.caption("⚠️ 本报告由 AI 自动生成，仅供学习研究，不构成投资建议。", help="")
-
-    # ── Export buttons ──────────────────────────────────────────────────────
     zip_bytes = _build_analyst_reports_zip(final_state)
 
-    col_summary, col_analyst = st.columns([1, 1])
-    with col_summary:
+    header_cols = st.columns([3, 1, 1])
+    with header_cols[0]:
+        st.markdown(
+            f'<span class="sticky-header-marker"></span><span style="font-size:1.05rem; font-weight:700; color:#1f2937;">{header_line}</span>',
+            unsafe_allow_html=True,
+        )
+    with header_cols[1]:
         if html_exists:
             st.download_button(
                 "📄 下载总结报告",
@@ -117,7 +110,7 @@ def render_report(
             )
         else:
             st.button("📄 总结报告未生成", disabled=True, use_container_width=True)
-    with col_analyst:
+    with header_cols[2]:
         st.download_button(
             "📊 下载分析师报告",
             data=zip_bytes,
@@ -126,8 +119,21 @@ def render_report(
             use_container_width=True,
         )
 
-    # ── Raw multi-agent reports (unchanged) ────────────────────────────────
+    # ── Compact HTML summary report (embedded, no iframe) ──────────────────
+    if html_exists:
+        st.markdown(
+            f'<div class="embedded-report">{_clean_html_for_embed(html_bytes.decode("utf-8"))}</div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.info("总结报告尚未生成")
+
+    # ── Raw multi-agent reports ────────────────────────────────────────────
     _render_raw_markdown(final_state, ticker, trade_date)
+
+    # ── Disclaimer at bottom ───────────────────────────────────────────────
+    st.markdown("---")
+    st.caption("⚠️ 本报告由 AI 自动生成，仅供学习研究，不构成投资建议。", help="")
 
 
 def _render_raw_markdown(final_state: dict[str, Any], ticker: str, trade_date: str) -> None:
@@ -169,7 +175,10 @@ def _render_raw_markdown(final_state: dict[str, Any], ticker: str, trade_date: s
         st.markdown("### 🛡️ 风控评估")
         risk_html_exists, risk_html_bytes = _resolve_risk_html_report(ticker, trade_date)
         if risk_html_exists:
-            st.components.v1.html(risk_html_bytes.decode("utf-8"), height=700, scrolling=True)
+            st.markdown(
+                f'<div class="embedded-report">{_clean_html_for_embed(risk_html_bytes.decode("utf-8"))}</div>',
+                unsafe_allow_html=True,
+            )
         else:
             tab_agg, tab_con, tab_neu, tab_rj = st.tabs(["激进", "保守", "中性", "风控决策"])
             with tab_agg:
